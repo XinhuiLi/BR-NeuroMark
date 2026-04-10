@@ -147,25 +147,29 @@ def plot_spec_curve_h2(df: pd.DataFrame, out_path: Path, *, dpi: int = 200) -> N
     if dfc.empty:
         return
 
-    fig, (ax_val, ax_p, ax_bot) = plt.subplots(
-        3, 1, figsize=(14, 8), sharex=True,
-        gridspec_kw={"height_ratios": [2, 1.2, 3], "hspace": 0.08},
+    fig, (ax_top, ax_bot) = plt.subplots(
+        2, 1, figsize=(14, 7), sharex=True,
+        gridspec_kw={"height_ratios": [2.5, 3], "hspace": 0.08},
     )
     xs = np.arange(len(dfc))
 
     h2_colors = np.where(dfc["h2_delta_d"].values > 0, _COLOR_GREEN, _COLOR_RED)
-    ax_val.bar(xs, dfc["h2_delta_d"].values, color=h2_colors, width=1.0, linewidth=0)
-    ax_val.axhline(0, color="k", lw=0.7)
-    ax_val.set_ylabel("Δ mean|d|", fontsize=_FONT_LABEL)
-    ax_val.set_title("H2 Specification Curve: Between- vs. Within-Domain", fontsize=_FONT_TITLE)
-    ax_val.tick_params(labelsize=_FONT_TICK)
+    ax_top.bar(xs, dfc["h2_delta_d"].values, color=h2_colors, width=1.0, linewidth=0, zorder=1)
+    ax_top.axhline(0, color="k", lw=0.7)
+    ax_top.set_ylabel("Δ mean|d|", fontsize=_FONT_LABEL)
+    ax_top.set_title("H2 Specification Curve: Between- vs. Within-Domain", fontsize=_FONT_TITLE)
+    ax_top.tick_params(labelsize=_FONT_TICK)
 
-    ax_p.scatter(xs, dfc["h2_p"].values, s=18, color="#e78ac3", alpha=0.85, zorder=3)
+    ax_p = ax_top.twinx()
+    ax_p.scatter(
+        xs, dfc["h2_p"].values, s=18, color="#e78ac3", alpha=0.85, zorder=3,
+        label="Permutation p",
+    )
     ax_p.axhline(0.05, color="red", ls="--", lw=1.0, label="p = 0.05")
     ax_p.set_ylabel("p-value", fontsize=_FONT_LABEL)
     ax_p.set_yscale("log")
-    ax_p.legend(fontsize=_FONT_LEGEND, loc="upper left")
     ax_p.tick_params(labelsize=_FONT_TICK)
+    ax_p.legend(fontsize=_FONT_LEGEND, loc="upper left")
 
     _tile_ax(ax_bot, dfc)
 
