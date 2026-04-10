@@ -1,0 +1,24 @@
+{
+  "folds": [
+    {
+      "clf__C": 0.1,
+      "ica_n_components_selected": 50
+    },
+    {
+      "clf__C": 0.5623413251903491,
+      "ica_n_components_selected": 50
+    },
+    {
+      "clf__C": 0.1,
+      "ica_n_components_selected": 50
+    },
+    {
+      "clf__C": 0.5623413251903491,
+      "ica_n_components_selected": 50
+    },
+    {
+      "clf__C": 0.1,
+      "ica_n_components_selected": 50
+    }
+  ]
+}

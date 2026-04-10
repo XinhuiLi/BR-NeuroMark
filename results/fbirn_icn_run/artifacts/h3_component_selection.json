@@ -1,0 +1,114 @@
+{
+  "mode": "bic",
+  "criterion": "bic",
+  "best_value": 4936386.111668538,
+  "k_min_requested": 5.0,
+  "k_max_requested": 50.0,
+  "k_step": 5,
+  "k_candidates": [
+    5,
+    10,
+    15,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50
+  ],
+  "k_range_used": "5-50",
+  "k_selected": 25,
+  "hypothesis_pairs_resolved": [
+    {
+      "short": [
+        "TN-DM",
+        "TN-CE"
+      ],
+      "resolved": [
+        "TN-DM",
+        "TN-CE"
+      ]
+    },
+    {
+      "short": [
+        "TN-DM",
+        "HC-IT"
+      ],
+      "resolved": [
+        "TN-DM",
+        "HC-IT"
+      ]
+    },
+    {
+      "short": [
+        "SC-ET",
+        "TN-CE"
+      ],
+      "resolved": [
+        "SC-ET",
+        "TN-CE"
+      ]
+    },
+    {
+      "short": [
+        "SC-ET",
+        "TN-DM"
+      ],
+      "resolved": [
+        "SC-ET",
+        "TN-DM"
+      ]
+    },
+    {
+      "short": [
+        "TN-CE",
+        "SM"
+      ],
+      "resolved": [
+        "TN-CE",
+        "SM"
+      ]
+    },
+    {
+      "short": [
+        "HC-IT",
+        "SM"
+      ],
+      "resolved": [
+        "HC-IT",
+        "SM"
+      ]
+    },
+    {
+      "short": [
+        "TN-DM",
+        "VI-OC"
+      ],
+      "resolved": [
+        "TN-DM",
+        "VI-OC"
+      ]
+    },
+    {
+      "short": [
+        "TN-SA",
+        "TN-DM"
+      ],
+      "resolved": [
+        "TN-SA",
+        "TN-DM"
+      ]
+    },
+    {
+      "short": [
+        "TN-SA",
+        "TN-CE"
+      ],
+      "resolved": [
+        "TN-SA",
+        "TN-CE"
+      ]
+    }
+  ]
+}

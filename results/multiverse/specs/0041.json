@@ -1,0 +1,18 @@
+{
+  "spec_id": 41,
+  "connectivity": "spearman",
+  "confound": "ols",
+  "reduction": "fa",
+  "classifier": "logistic_l2",
+  "domain_granularity": "subdomain_14",
+  "h1_auc_edges": 0.8373248248248247,
+  "h1_auc_latent": 0.8195362028695362,
+  "h1_delta_auc": -0.01778862195528852,
+  "h2_delta_d": 0.021038631416742837,
+  "h2_p": 0.03792415169660679,
+  "h3_wilcoxon_p": 8.20159912109375e-05,
+  "h3_n_factors": 20,
+  "h3_between_gt_within": 16,
+  "duration_s": 139.4970359802246,
+  "error": ""
+}

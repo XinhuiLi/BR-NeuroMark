@@ -19,8 +19,135 @@ from fbirn_experiment.pipeline import run_experiment
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="FBIRN ICN FNC experiment (H1: edges vs FA vs ICA; H2; H3 FA)."
+        description="FBIRN ICN FNC experiment (H1: edges vs FA vs ICA; H2; H3 FA).",
     )
+    sub = parser.add_subparsers(dest="command")
+    _add_run_parser(sub)
+    _add_multiverse_parser(sub)
+    _populate_run_args(parser)
+
+    args = parser.parse_args()
+    if args.command == "multiverse":
+        _run_multiverse_cmd(args)
+    else:
+        _run_main_cmd(args)
+
+
+def _add_multiverse_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser("multiverse", help="Run multiverse analysis.")
+    p.add_argument("--tc", type=Path, default=DEFAULT_TC_PATH)
+    p.add_argument("--labels", type=Path, default=DEFAULT_LABEL_PATH)
+    p.add_argument("--icn-domain", type=Path, default=None)
+    p.add_argument("--confounds-csv", type=Path, default=None)
+    p.add_argument(
+        "--confound-cols", type=str, nargs="+",
+        default=["age", "sex", "race", "site", "hm"],
+    )
+    p.add_argument("--out", type=Path, default=Path("results/multiverse"))
+    p.add_argument("--outer-splits", type=int, default=5)
+    p.add_argument("--inner-splits", type=int, default=3)
+    p.add_argument("--k-min", type=int, default=5)
+    p.add_argument("--k-max", type=int, default=50)
+    p.add_argument("--k-step", type=int, default=5)
+    p.add_argument("--h2-perm", type=int, default=500)
+    p.add_argument("--synthetic", action="store_true")
+    p.add_argument("--mini", action="store_true", help="Run mini-multiverse (48 specs) only.")
+    p.add_argument("--no-figures", action="store_true")
+    p.add_argument(
+        "--n-jobs", type=int, default=1,
+        help="Parallel workers for multiverse specs (-1 = all cores). Default: 1 (serial).",
+    )
+    p.add_argument(
+        "--connectivity", type=str, nargs="+", default=None,
+        help="Override connectivity methods (e.g. pearson_z spearman partial_corr mutual_info).",
+    )
+    p.add_argument(
+        "--confound-strategies", type=str, nargs="+", default=None,
+        help="Override confound strategies (e.g. none ols combat).",
+    )
+    p.add_argument(
+        "--reductions", type=str, nargs="+", default=None,
+        help="Override reduction methods (e.g. none fa ica pca nmf).",
+    )
+    p.add_argument(
+        "--classifiers", type=str, nargs="+", default=None,
+        help="Override classifiers (e.g. elasticnet logistic_l2 svm_linear rf).",
+    )
+    p.add_argument(
+        "--granularities", type=str, nargs="+", default=None,
+        help="Override domain granularities (e.g. subdomain_14 domain_7).",
+    )
+
+
+def _run_multiverse_cmd(args: argparse.Namespace) -> None:
+    from fbirn_experiment.multiverse import (  # noqa: PLC0415
+        enumerate_multiverse,
+        run_multiverse,
+    )
+    from fbirn_experiment.multiverse_figures import (  # noqa: PLC0415
+        generate_multiverse_figures,
+    )
+
+    if args.synthetic:
+        tc, y, icn_domain = synthetic_dataset()
+    else:
+        tc, y, icn_domain = load_fbirn_tc_and_labels(
+            args.tc, args.labels, args.icn_domain,
+        )
+
+    confound_csv: Path | None = None
+    if args.confounds_csv is not None:
+        confound_csv = args.confounds_csv
+    elif not args.synthetic and DEFAULT_CONFOUND_CSV_PATH.is_file():
+        confound_csv = DEFAULT_CONFOUND_CSV_PATH
+        print(f"Auto-detected confound CSV: {confound_csv}")
+
+    if args.mini:
+        specs = enumerate_multiverse(
+            connectivity=["pearson_z", "spearman"],
+            confound=["none", "ols"],
+            reduction=["none", "fa", "ica"],
+            classifier=["logistic_l2", "svm_linear"],
+            domain_granularity=["domain_7", "subdomain_14"],
+        )
+    else:
+        specs = enumerate_multiverse(
+            connectivity=args.connectivity,
+            confound=args.confound_strategies,
+            reduction=args.reductions,
+            classifier=args.classifiers,
+            domain_granularity=args.granularities,
+        )
+
+    print(f"Multiverse: {len(specs)} specifications")
+
+    df = run_multiverse(
+        tc, y, icn_domain, specs,
+        confound_csv=confound_csv,
+        confound_cols=tuple(args.confound_cols),
+        output_dir=args.out,
+        outer_splits=args.outer_splits,
+        inner_splits=args.inner_splits,
+        k_min=args.k_min,
+        k_max=args.k_max,
+        k_step=args.k_step,
+        h2_n_perm=args.h2_perm,
+        n_jobs=args.n_jobs,
+    )
+
+    if not args.no_figures:
+        fig_dir = args.out / "figures"
+        generate_multiverse_figures(df, fig_dir)
+
+    print(f"\nMultiverse results → {args.out}")
+
+
+def _add_run_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser("run", help="Run the main experiment.")
+    _populate_run_args(p)
+
+
+def _populate_run_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--synthetic", action="store_true", help="Use synthetic data")
     parser.add_argument(
         "--tc",
@@ -117,8 +244,9 @@ def main() -> None:
     )
     parser.add_argument("--no-save", action="store_true", help="Skip writing artifacts")
     parser.add_argument("--no-figures", action="store_true", help="Skip figure generation")
-    args = parser.parse_args()
 
+
+def _run_main_cmd(args: argparse.Namespace) -> None:
     if args.synthetic:
         tc, y, icn_domain = synthetic_dataset()
     elif args.npz:
@@ -136,7 +264,6 @@ def main() -> None:
             f"Labels: {args.labels} — HC={int((y == 0).sum())}, SZ={int((y == 1).sum())}"
         )
 
-    # Resolve confound CSV path
     confound_csv: Path | None = None
     if not args.no_confounds:
         if args.confounds_csv is not None:

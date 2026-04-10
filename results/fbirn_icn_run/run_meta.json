@@ -1,0 +1,36 @@
+{
+  "n_subjects": 363,
+  "n_timepoints": 157,
+  "n_icns": 105,
+  "n_fnc_edges": 5460,
+  "outer_splits": 5,
+  "inner_splits": 3,
+  "k_min": 5,
+  "k_max": 50,
+  "k_step": 5,
+  "fa_criterion": "bic",
+  "confounds_applied": true,
+  "confound_columns_raw": [
+    "age",
+    "sex",
+    "race",
+    "site",
+    "hm"
+  ],
+  "design_matrix_columns": [
+    "age",
+    "sex_male",
+    "race_Black",
+    "race_Other",
+    "race_White",
+    "site_fbirn_12",
+    "site_fbirn_13",
+    "site_fbirn_18",
+    "site_fbirn_3",
+    "site_fbirn_7",
+    "site_fbirn_9",
+    "hm",
+    "intercept"
+  ],
+  "n_regressors": 13
+}

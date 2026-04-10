@@ -1,0 +1,8 @@
+{
+  "observed_delta_mean_abs_d": 0.02052735196775135,
+  "p_value_two_sided": 0.0399800099950025,
+  "n_perm": 2000,
+  "mean_abs_d_between": 0.22258794158683146,
+  "mean_abs_d_within": 0.2020605896190801,
+  "n_null": 2000
+}

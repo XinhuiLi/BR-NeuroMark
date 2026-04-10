@@ -1,0 +1,4 @@
+Hypothesis,Total specs,# Favourable,% Robust,Median effect
+H1: Latent > Edges,32,10,31.2,-0.0099
+H2: Between > Within,48,48,100.0,0.0374
+H3: Between loading advantage,32,26,81.2,0.0099

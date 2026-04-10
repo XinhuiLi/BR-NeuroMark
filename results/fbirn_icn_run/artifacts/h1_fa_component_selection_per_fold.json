@@ -1,0 +1,109 @@
+{
+  "folds": [
+    {
+      "criterion": "bic",
+      "best_value": 4035820.907806356,
+      "k_min_requested": 5.0,
+      "k_max_requested": 50.0,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_range_used": "5-50",
+      "k_selected": 20
+    },
+    {
+      "criterion": "bic",
+      "best_value": 4026106.177620167,
+      "k_min_requested": 5.0,
+      "k_max_requested": 50.0,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_range_used": "5-50",
+      "k_selected": 15
+    },
+    {
+      "criterion": "bic",
+      "best_value": 4000944.653093366,
+      "k_min_requested": 5.0,
+      "k_max_requested": 50.0,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_range_used": "5-50",
+      "k_selected": 15
+    },
+    {
+      "criterion": "bic",
+      "best_value": 4021472.1058221017,
+      "k_min_requested": 5.0,
+      "k_max_requested": 50.0,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_range_used": "5-50",
+      "k_selected": 20
+    },
+    {
+      "criterion": "bic",
+      "best_value": 4029983.5084368344,
+      "k_min_requested": 5.0,
+      "k_max_requested": 50.0,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_range_used": "5-50",
+      "k_selected": 15
+    }
+  ]
+}

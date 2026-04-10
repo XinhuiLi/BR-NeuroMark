@@ -1,0 +1,47 @@
+{
+  "fa_vs_edges": {
+    "comparison": "fa_logistic_vs_edges_elasticnet",
+    "oof_auc_delta_a_minus_b": -0.029567117964907963,
+    "bootstrap_p_two_sided": 0.9962,
+    "bootstrap_ci95_delta": [
+      -0.05771991433650848,
+      -0.0025922748166873136
+    ],
+    "permutation_y_p_two_sided": 0.05318936212757448,
+    "permutation_y_delta_at_obs_labels": -0.029567117964907963,
+    "wilcoxon_fold_statistic": 0.0,
+    "wilcoxon_fold_p_two_sided": 0.0625,
+    "n_bootstrap": 10000,
+    "n_perm_y": 5000
+  },
+  "ica_vs_edges": {
+    "comparison": "ica_logistic_vs_edges_elasticnet",
+    "oof_auc_delta_a_minus_b": -0.013174670633234187,
+    "bootstrap_p_two_sided": 0.9994,
+    "bootstrap_ci95_delta": [
+      -0.044569613566222514,
+      0.017184969277555598
+    ],
+    "permutation_y_p_two_sided": 0.4293141371725655,
+    "permutation_y_delta_at_obs_labels": -0.013174670633234187,
+    "wilcoxon_fold_statistic": 7.0,
+    "wilcoxon_fold_p_two_sided": 1.0,
+    "n_bootstrap": 10000,
+    "n_perm_y": 5000
+  },
+  "fa_vs_ica": {
+    "comparison": "fa_logistic_vs_ica_logistic",
+    "oof_auc_delta_a_minus_b": -0.016392447331673776,
+    "bootstrap_p_two_sided": 0.9986,
+    "bootstrap_ci95_delta": [
+      -0.04638331553388016,
+      0.01260586631103394
+    ],
+    "permutation_y_p_two_sided": 0.29674065186962606,
+    "permutation_y_delta_at_obs_labels": -0.016392447331673776,
+    "wilcoxon_fold_statistic": 3.0,
+    "wilcoxon_fold_p_two_sided": 0.3125,
+    "n_bootstrap": 10000,
+    "n_perm_y": 5000
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "folds": [
+    {
+      "criterion": "ica_reconstruction_mse",
+      "best_value": 0.3148841924262347,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_selected": 50
+    },
+    {
+      "criterion": "ica_reconstruction_mse",
+      "best_value": 0.3122144142068283,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_selected": 50
+    },
+    {
+      "criterion": "ica_reconstruction_mse",
+      "best_value": 0.3063271403477347,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_selected": 50
+    },
+    {
+      "criterion": "ica_reconstruction_mse",
+      "best_value": 0.30818591844225296,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_selected": 50
+    },
+    {
+      "criterion": "ica_reconstruction_mse",
+      "best_value": 0.30891380968634474,
+      "k_step": 5,
+      "k_candidates": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "k_selected": 50
+    }
+  ]
+}

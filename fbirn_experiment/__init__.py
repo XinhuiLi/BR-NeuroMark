@@ -16,6 +16,16 @@ from fbirn_experiment.confounds import (
     regress_confounds,
     regress_confounds_cv,
 )
+from fbirn_experiment.connectivity import (
+    CONNECTIVITY_METHODS,
+    ConnectivityMethod,
+    fnc_edges,
+)
+from fbirn_experiment.domain_labels import (
+    DOMAIN_GRANULARITIES,
+    DomainGranularity,
+    aggregate_domains,
+)
 from fbirn_experiment.fnc import fnc_edges_from_tc
 from fbirn_experiment.h1_cv import NestedCVResult, nested_cv_classifiers, summarize_h1
 from fbirn_experiment.h2_test import h2_domain_label_permutation_test
@@ -26,9 +36,23 @@ from fbirn_experiment.io_data import (
     load_npz,
     synthetic_dataset,
 )
+from fbirn_experiment.multiverse import (
+    CLASSIFIER_CHOICES,
+    CONFOUND_STRATEGIES,
+    REDUCTION_METHODS,
+    MultispecConfig,
+    SpecResult,
+    enumerate_multiverse,
+    run_multiverse,
+    run_single_spec,
+)
 from fbirn_experiment.pipeline import run_experiment
 
 __all__ = [
+    "CLASSIFIER_CHOICES",
+    "CONFOUND_STRATEGIES",
+    "CONNECTIVITY_METHODS",
+    "ConnectivityMethod",
     "DEFAULT_CONFOUND_CSV_PATH",
     "DEFAULT_DATA_DIR",
     "DEFAULT_ICN_DOMAIN_PATH",
@@ -36,11 +60,19 @@ __all__ = [
     "DEFAULT_NEUROMARK_XLSX_PATH",
     "DEFAULT_OUTPUT_DIR",
     "DEFAULT_TC_PATH",
+    "DOMAIN_GRANULARITIES",
+    "DomainGranularity",
     "H3Result",
+    "MultispecConfig",
     "NestedCVResult",
+    "REDUCTION_METHODS",
     "SZ_HYPOTHESIS_PAIRS",
+    "SpecResult",
     "PROJECT_ROOT",
+    "aggregate_domains",
     "build_design_matrix",
+    "enumerate_multiverse",
+    "fnc_edges",
     "fnc_edges_from_tc",
     "h2_domain_label_permutation_test",
     "h3_factor_loadings_between_within",
@@ -52,6 +84,8 @@ __all__ = [
     "regress_confounds",
     "regress_confounds_cv",
     "run_experiment",
+    "run_multiverse",
+    "run_single_spec",
     "summarize_h1",
     "synthetic_dataset",
 ]
