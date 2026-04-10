@@ -21,7 +21,7 @@ Multiverse / specification-curve analysis (Steegen et al., 2016; Simonsohn et al
 
 **Why mini omits some levels:** Smaller grid for routine runs; `--mini` drops ComBat so results are not duplicated when `neuroCombat` is absent. Use the full grid + optional CLI filters for broader coverage.
 
-## Robustness summary (mini only)
+## Robustness summary (mini)
 
 Source: `results/multiverse/figures/mv_robustness_summary.csv`.
 
@@ -35,44 +35,7 @@ Joint binomial test (`mv_joint_permutation_test.csv`): counts exceed the α = 0.
 
 ---
 
-## Decision forks (overview)
-
-| ID | Topic | Full level count |
-|----|--------|------------------|
-| D1 | Connectivity | 4 |
-| D2 | Confound | 3 |
-| D3 | Reduction | 5 |
-| D4 | Classifier | 4 |
-| D5 | Domain | 2 |
-
-Traveler’s Guide types (Del Giudice & Gangestad, 2021): D1/D4 equivalence; D2 nonequivalence; D3/D5 uncertainty.
-
----
-
-## Marginal influence (forest plots)
-
-Expected outcome at each fork level, averaging over other forks:
-
-$$
-\operatorname{Influence}(D_k = \ell)
-  = \mathbb{E}_{\neg D_k}\bigl[\,\text{outcome} \mid D_k = \ell\,\bigr]
-$$
-
----
-
-## Joint inference across specifications
-
-Under independence, the number of “significant” specs should match a binomial with rate $\alpha$:
-
-$$
-H_0:\; \Pr(\text{spec is significant}) = \alpha
-$$
-
-Implementation: `mv_joint_permutation_test.csv`.
-
----
-
-## Figures (mini run)
+## Figures (mini)
 
 Specification curves and raincloud “forest” plots:
 
