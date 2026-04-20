@@ -19,16 +19,21 @@ from fbirn_experiment.pipeline import run_experiment
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="FBIRN ICN FNC experiment (H1: edges vs FA vs ICA; H2; H3 FA).",
+        description=(
+            "FBIRN ICN FNC experiment (H1: all edges L2 logistic vs ICA; optional FA; H2; H3 FA)."
+        ),
     )
     sub = parser.add_subparsers(dest="command")
     _add_run_parser(sub)
     _add_multiverse_parser(sub)
+    _add_regen_h1_latent_figs_parser(sub)
     _populate_run_args(parser)
 
     args = parser.parse_args()
     if args.command == "multiverse":
         _run_multiverse_cmd(args)
+    elif args.command == "regen-h1-latent-figs":
+        _run_regen_h1_latent_figs_cmd(args)
     else:
         _run_main_cmd(args)
 
@@ -142,6 +147,79 @@ def _run_multiverse_cmd(args: argparse.Namespace) -> None:
     print(f"\nMultiverse results → {args.out}")
 
 
+def _add_regen_h1_latent_figs_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "regen-h1-latent-figs",
+        help=(
+            "Redraw h1_ica_latent_interpretability.png (and h1_fa_*.png if FA coefs exist in artifacts) "
+            "from saved NPZ only (no data / CV re-run)."
+        ),
+    )
+    p.add_argument(
+        "--run-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help="Experiment output directory (reads run_dir/artifacts, writes run_dir/figures).",
+    )
+    p.add_argument(
+        "--dpi",
+        type=int,
+        default=150,
+        help="PNG resolution.",
+    )
+    p.add_argument(
+        "--matrix-col-inches",
+        type=float,
+        default=None,
+        help=(
+            "Figure width per matrix column (matplotlib inches). "
+            "Default from plot_h1_latent_coefficients_and_loadings (~2.12)."
+        ),
+    )
+    p.add_argument(
+        "--matrix-row-inches",
+        type=float,
+        default=None,
+        help=(
+            "Figure height per matrix row (matplotlib inches). "
+            "Default from plot_h1_latent_coefficients_and_loadings (~1.58)."
+        ),
+    )
+    p.add_argument(
+        "--matrix-hspace",
+        type=float,
+        default=None,
+        help="Vertical gap between matrix subplots (matplotlib fraction; default ~0.09).",
+    )
+    p.add_argument(
+        "--matrix-wspace",
+        type=float,
+        default=None,
+        help="Horizontal gap between matrix subplots (matplotlib fraction; default ~0.09).",
+    )
+
+
+def _run_regen_h1_latent_figs_cmd(args: argparse.Namespace) -> None:
+    from fbirn_experiment.figures import regenerate_h1_latent_interpretability_figures  # noqa: PLC0415
+
+    run_dir = Path(args.run_dir)
+    plot_kw: dict[str, float] = {}
+    if args.matrix_col_inches is not None:
+        plot_kw["matrix_col_inches"] = float(args.matrix_col_inches)
+    if args.matrix_row_inches is not None:
+        plot_kw["matrix_row_inches"] = float(args.matrix_row_inches)
+    if args.matrix_hspace is not None:
+        plot_kw["matrix_hspace"] = float(args.matrix_hspace)
+    if args.matrix_wspace is not None:
+        plot_kw["matrix_wspace"] = float(args.matrix_wspace)
+    regenerate_h1_latent_interpretability_figures(
+        run_dir / "artifacts",
+        run_dir / "figures",
+        dpi=int(args.dpi),
+        **plot_kw,
+    )
+
+
 def _add_run_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("run", help="Run the main experiment.")
     _populate_run_args(p)
@@ -209,6 +287,11 @@ def _populate_run_args(parser: argparse.ArgumentParser) -> None:
         help="GridSearchCV parallel jobs (-1 = all cores).",
     )
     parser.add_argument("--full-grid", action="store_true")
+    parser.add_argument(
+        "--h1-include-fa",
+        action="store_true",
+        help="Add FA to H1 nested CV and interpretability (default: edges + ICA only).",
+    )
     parser.add_argument("--k-min", type=int, default=5, help="Min latent factors (FA BIC / ICA MSE).")
     parser.add_argument("--k-max", type=int, default=50, help="Max latent factors (FA BIC / ICA MSE).")
     parser.add_argument("--k-step", type=int, default=5, help="Step size for component search grid.")
@@ -297,6 +380,7 @@ def _run_main_cmd(args: argparse.Namespace) -> None:
         auc_perm_y=args.auc_perm_y,
         save_artifacts=not args.no_save,
         make_figures=not args.no_figures,
+        h1_include_fa=args.h1_include_fa,
     )
 
     print(f"\nOutputs → {result['output_dir']}")

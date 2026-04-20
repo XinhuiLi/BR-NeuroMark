@@ -46,6 +46,9 @@ def save_h1_outputs(
     res_ica: Any,
     summary: pd.DataFrame,
     auc_tests: dict[str, Any] | None = None,
+    *,
+    stability_tests: dict[str, Any] | None = None,
+    interpretability: dict[str, Any] | None = None,
 ) -> None:
     out_dir = ensure_dir(out_dir)
     summary.to_csv(out_dir / "h1_nested_cv_summary.csv", index=False)
@@ -53,15 +56,16 @@ def save_h1_outputs(
         out_dir / "h1_best_params_edges.json",
         {"folds": res_edges.best_params_per_fold},
     )
-    save_json(
-        out_dir / "h1_best_params_fa.json",
-        {"folds": res_fa.best_params_per_fold},
-    )
+    if res_fa is not None:
+        save_json(
+            out_dir / "h1_best_params_fa.json",
+            {"folds": res_fa.best_params_per_fold},
+        )
     save_json(
         out_dir / "h1_best_params_ica.json",
         {"folds": res_ica.best_params_per_fold},
     )
-    if res_fa.meta_per_fold:
+    if res_fa is not None and res_fa.meta_per_fold:
         save_json(
             out_dir / "h1_fa_component_selection_per_fold.json",
             {"folds": res_fa.meta_per_fold},
@@ -71,18 +75,41 @@ def save_h1_outputs(
             out_dir / "h1_ica_component_selection_per_fold.json",
             {"folds": res_ica.meta_per_fold},
         )
-    np.savez_compressed(
-        out_dir / "h1_oof_predictions.npz",
-        y_true=res_edges.y_true_oof,
-        proba_edges=res_edges.proba_oof,
-        proba_fa=res_fa.proba_oof,
-        proba_ica=res_ica.proba_oof,
-        auc_edges_per_fold=res_edges.outer_aucs,
-        auc_fa_per_fold=res_fa.outer_aucs,
-        auc_ica_per_fold=res_ica.outer_aucs,
-    )
+    oof_pack: dict[str, Any] = {
+        "y_true": res_edges.y_true_oof,
+        "proba_edges": res_edges.proba_oof,
+        "proba_ica": res_ica.proba_oof,
+        "auc_edges_per_fold": res_edges.outer_aucs,
+        "auc_ica_per_fold": res_ica.outer_aucs,
+    }
+    if res_fa is not None:
+        oof_pack["proba_fa"] = res_fa.proba_oof
+        oof_pack["auc_fa_per_fold"] = res_fa.outer_aucs
+    np.savez_compressed(out_dir / "h1_oof_predictions.npz", **oof_pack)
     if auc_tests is not None:
         save_json(out_dir / "h1_auc_pairwise_tests.json", auc_tests)
+    if stability_tests is not None:
+        save_json(out_dir / "h1_stability_tests.json", stability_tests)
+    if interpretability is not None:
+        meta: dict[str, Any] = {
+            "hyperparams_edges": interpretability.get("hyperparams_edges"),
+            "hyperparams_ica": interpretability.get("hyperparams_ica"),
+        }
+        if "hyperparams_fa" in interpretability:
+            meta["hyperparams_fa"] = interpretability["hyperparams_fa"]
+        save_json(out_dir / "h1_interpretability_meta.json", meta)
+        coef_pack: dict[str, Any] = {
+            "coef_edges": interpretability["coef_edges"],
+            "coef_ica_latent": interpretability["coef_ica_latent"],
+            "ica_components": interpretability["ica_components"],
+        }
+        if "coef_fa_latent" in interpretability:
+            coef_pack["coef_fa_latent"] = interpretability["coef_fa_latent"]
+            coef_pack["fa_components"] = interpretability["fa_components"]
+        np.savez_compressed(
+            out_dir / "h1_interpretability_coefs.npz",
+            **coef_pack,
+        )
 
 
 def save_fnc_bundle(

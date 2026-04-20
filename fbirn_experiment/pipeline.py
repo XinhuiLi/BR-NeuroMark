@@ -18,6 +18,8 @@ from fbirn_experiment.figures import generate_all_figures
 from fbirn_experiment.fnc import fnc_edges_from_tc
 from fbirn_experiment.h1_cv import (
     all_pairwise_auc_tests,
+    compute_h1_stability_tests,
+    fit_h1_interpretability_refits,
     nested_cv_classifiers,
     summarize_h1,
 )
@@ -59,6 +61,7 @@ def run_experiment(
     auc_perm_y: int = 5000,
     save_artifacts: bool = True,
     make_figures: bool = True,
+    h1_include_fa: bool = False,
     random_state_h2: int = 1,
     random_state_h3: int = 0,
     auc_test_seed: int = 42,
@@ -111,6 +114,8 @@ def run_experiment(
             "k_max": k_max,
             "k_step": k_step,
             "fa_criterion": fa_criterion,
+            "h1_include_fa": bool(h1_include_fa),
+            "h1_edges_classifier": "logistic_l2",
             **confound_meta,
         }
         save_json(out / "run_meta.json", run_meta)
@@ -128,6 +133,7 @@ def run_experiment(
         k_step=k_step,
         fa_criterion=fa_criterion if fa_criterion in ("bic", "aic") else "bic",
         confound_matrix=confound_matrix,
+        include_fa=h1_include_fa,
     )
     h1_summary = summarize_h1(res_e, res_fa, res_ica)
     auc_tests = all_pairwise_auc_tests(
@@ -138,9 +144,20 @@ def run_experiment(
         n_perm_y=auc_perm_y,
         random_state=auc_test_seed,
     )
+    h1_stability = compute_h1_stability_tests(res_e, res_fa, res_ica)
+    h1_interp = fit_h1_interpretability_refits(edges, y, res_e, res_fa, res_ica)
 
     if save_artifacts:
-        save_h1_outputs(artifacts, res_e, res_fa, res_ica, h1_summary, auc_tests)
+        save_h1_outputs(
+            artifacts,
+            res_e,
+            res_fa,
+            res_ica,
+            h1_summary,
+            auc_tests,
+            stability_tests=h1_stability,
+            interpretability=h1_interp,
+        )
 
     # H2 / H3: use full-sample residualized edges
     h2 = h2_domain_label_permutation_test(
@@ -192,6 +209,8 @@ def run_experiment(
             n_icns,
             icn_domain=icn_domain,
             h3_domain_pair_summary=h3.domain_pair_summary,
+            h1_stability=h1_stability,
+            h1_interpretability=h1_interp,
         )
 
     return {
@@ -200,6 +219,16 @@ def run_experiment(
         "confound_meta": confound_meta,
         "h1_summary": h1_summary,
         "h1_auc_tests": auc_tests,
+        "h1_stability": h1_stability,
+        "h1_interpretability": {
+            "hyperparams_edges": h1_interp["hyperparams_edges"],
+            **(
+                {"hyperparams_fa": h1_interp["hyperparams_fa"]}
+                if "hyperparams_fa" in h1_interp
+                else {}
+            ),
+            "hyperparams_ica": h1_interp["hyperparams_ica"],
+        },
         "h2": {k: v for k, v in h2.items() if k not in ("null_delta_mean_abs_d", "edge_cohens_d", "mask_between", "mask_within")},
         "h3_summary": h3.summary,
         "h3_domain_pair_summary": h3.domain_pair_summary,

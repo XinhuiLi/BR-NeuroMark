@@ -27,7 +27,13 @@ from fbirn_experiment.domain_labels import (
     aggregate_domains,
 )
 from fbirn_experiment.fnc import fnc_edges_from_tc
-from fbirn_experiment.h1_cv import NestedCVResult, nested_cv_classifiers, summarize_h1
+from fbirn_experiment.h1_cv import (
+    NestedCVResult,
+    compute_h1_stability_tests,
+    fit_h1_interpretability_refits,
+    nested_cv_classifiers,
+    summarize_h1,
+)
 from fbirn_experiment.h2_test import h2_domain_label_permutation_test
 from fbirn_experiment.h3_test import H3Result, SZ_HYPOTHESIS_PAIRS, h3_factor_loadings_between_within
 from fbirn_experiment.io_data import (
@@ -65,6 +71,8 @@ __all__ = [
     "H3Result",
     "MultispecConfig",
     "NestedCVResult",
+    "compute_h1_stability_tests",
+    "fit_h1_interpretability_refits",
     "REDUCTION_METHODS",
     "SZ_HYPOTHESIS_PAIRS",
     "SpecResult",

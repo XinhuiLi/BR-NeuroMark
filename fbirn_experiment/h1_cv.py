@@ -1,4 +1,4 @@
-"""H1: nested CV comparing edge-based vs FA vs ICA + logistic classifiers."""
+"""H1: nested CV comparing full FNC edges vs optional FA / ICA + classifiers."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pandas as pd
 from scipy import stats
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.decomposition import FactorAnalysis, FastICA
-from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.pipeline import Pipeline
@@ -76,18 +76,17 @@ class FastICATransform(BaseEstimator, TransformerMixin):
 
 
 def make_edge_pipeline() -> Pipeline:
+    """All edge features → standardized logistic regression (L2, same family as latent path)."""
     return Pipeline(
         steps=[
             ("scaler", StandardScaler()),
             (
                 "clf",
-                SGDClassifier(
-                    loss="log_loss",
-                    penalty="elasticnet",
+                LogisticRegression(
+                    penalty="l2",
+                    solver="lbfgs",
+                    max_iter=5000,
                     random_state=0,
-                    max_iter=4000,
-                    tol=1e-3,
-                    fit_intercept=True,
                 ),
             ),
         ]
@@ -132,28 +131,32 @@ class NestedCVResult:
 
 def summarize_h1(
     res_edges: NestedCVResult,
-    res_fa: NestedCVResult,
+    res_fa: NestedCVResult | None,
     res_ica: NestedCVResult,
 ) -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "model": res_edges.name,
-                "auc_mean": res_edges.outer_aucs.mean(),
-                "auc_std": res_edges.outer_aucs.std(),
-            },
+    rows: list[dict[str, Any]] = [
+        {
+            "model": res_edges.name,
+            "auc_mean": res_edges.outer_aucs.mean(),
+            "auc_std": res_edges.outer_aucs.std(),
+        },
+    ]
+    if res_fa is not None:
+        rows.append(
             {
                 "model": res_fa.name,
                 "auc_mean": res_fa.outer_aucs.mean(),
                 "auc_std": res_fa.outer_aucs.std(),
             },
-            {
-                "model": res_ica.name,
-                "auc_mean": res_ica.outer_aucs.mean(),
-                "auc_std": res_ica.outer_aucs.std(),
-            },
-        ]
+        )
+    rows.append(
+        {
+            "model": res_ica.name,
+            "auc_mean": res_ica.outer_aucs.mean(),
+            "auc_std": res_ica.outer_aucs.std(),
+        },
     )
+    return pd.DataFrame(rows)
 
 
 def nested_cv_classifiers(
@@ -172,11 +175,12 @@ def nested_cv_classifiers(
     fa_bic_max_iter: int = 800,
     ica_select_max_iter: int = 800,
     confound_matrix: np.ndarray | None = None,
-) -> tuple[NestedCVResult, NestedCVResult, NestedCVResult]:
+    include_fa: bool = False,
+) -> tuple[NestedCVResult, NestedCVResult | None, NestedCVResult]:
     """
-    Outer CV: on each training fold, select FA k by BIC/AIC and ICA k by
-    reconstruction MSE on scaled training features; inner CV tunes only
-    classifier regularization (and edge elastic-net hyperparameters).
+    Outer CV: on each training fold, select ICA k by reconstruction MSE on scaled
+    training features; optionally the same for FA (*include_fa*). Inner CV tunes
+    ``clf__C`` for edges (L2 logistic), latent logistic, and (if enabled) FA.
 
     If *confound_matrix* is provided (n_subjects × n_regressors, with intercept),
     confound regression is fit on each outer training fold and applied to both
@@ -192,24 +196,20 @@ def nested_cv_classifiers(
     )
 
     if full_hyperparameter_search:
-        alphas = np.logspace(-5, 0, 10)
-        l1s = (0.15, 0.5, 0.85)
         Cs = np.logspace(-2, 2, 8)
     else:
-        alphas = np.logspace(-4, -1, 5)
-        l1s = (0.5,)
         Cs = np.logspace(-1, 2, 5)
 
     aucs_edges: list[float] = []
-    aucs_fa: list[float] = []
+    aucs_fa: list[float] = [] if include_fa else []
     aucs_ica: list[float] = []
     params_edges: list[dict[str, Any]] = []
-    params_fa: list[dict[str, Any]] = []
+    params_fa: list[dict[str, Any]] = [] if include_fa else []
     params_ica: list[dict[str, Any]] = []
-    meta_fa: list[dict[str, Any]] = []
+    meta_fa: list[dict[str, Any]] = [] if include_fa else []
     meta_ica: list[dict[str, Any]] = []
     oof_e = np.zeros(n, dtype=np.float64)
-    oof_fa = np.zeros(n, dtype=np.float64)
+    oof_fa = np.zeros(n, dtype=np.float64) if include_fa else np.array([])
     oof_ica = np.zeros(n, dtype=np.float64)
     y_oof = np.zeros(n, dtype=np.int64)
 
@@ -226,15 +226,16 @@ def nested_cv_classifiers(
         scaler_sel = StandardScaler()
         X_tr_s = scaler_sel.fit_transform(X_tr)
 
-        k_fa, diag_fa = select_n_components_fa(
-            X_tr_s,
-            k_min=k_min,
-            k_max=k_max,
-            k_step=k_step,
-            criterion=fa_criterion,
-            random_state=random_state + fold_idx,
-            max_iter=fa_bic_max_iter,
-        )
+        if include_fa:
+            k_fa, diag_fa = select_n_components_fa(
+                X_tr_s,
+                k_min=k_min,
+                k_max=k_max,
+                k_step=k_step,
+                criterion=fa_criterion,
+                random_state=random_state + fold_idx,
+                max_iter=fa_bic_max_iter,
+            )
         k_ica, diag_ica = select_n_components_ica(
             X_tr_s,
             k_min=k_min,
@@ -245,7 +246,7 @@ def nested_cv_classifiers(
         )
 
         pipe_e = make_edge_pipeline()
-        grid_e = {"clf__alpha": alphas, "clf__l1_ratio": l1s}
+        grid_e = {"clf__C": Cs}
         gs_e = GridSearchCV(
             pipe_e,
             grid_e,
@@ -260,23 +261,24 @@ def nested_cv_classifiers(
         aucs_edges.append(roc_auc_score(y_te, p_e))
         params_edges.append(gs_e.best_params_)
 
-        pipe_fa = make_latent_pipeline("fa", k_fa)
-        grid_fa = {"clf__C": Cs}
-        gs_fa = GridSearchCV(
-            pipe_fa,
-            grid_fa,
-            cv=inner_cv,
-            scoring="roc_auc",
-            n_jobs=n_jobs,
-            refit=True,
-        )
-        gs_fa.fit(X_tr, y_tr)
-        p_fa = gs_fa.predict_proba(X_te)[:, 1]
-        oof_fa[te] = p_fa
-        aucs_fa.append(roc_auc_score(y_te, p_fa))
-        bp = gs_fa.best_params_
-        params_fa.append({**bp, "fa_n_components_selected": k_fa})
-        meta_fa.append({**diag_fa, "k_selected": int(k_fa)})
+        if include_fa:
+            pipe_fa = make_latent_pipeline("fa", k_fa)
+            grid_fa = {"clf__C": Cs}
+            gs_fa = GridSearchCV(
+                pipe_fa,
+                grid_fa,
+                cv=inner_cv,
+                scoring="roc_auc",
+                n_jobs=n_jobs,
+                refit=True,
+            )
+            gs_fa.fit(X_tr, y_tr)
+            p_fa = gs_fa.predict_proba(X_te)[:, 1]
+            oof_fa[te] = p_fa
+            aucs_fa.append(roc_auc_score(y_te, p_fa))
+            bp = gs_fa.best_params_
+            params_fa.append({**bp, "fa_n_components_selected": k_fa})
+            meta_fa.append({**diag_fa, "k_selected": int(k_fa)})
 
         pipe_ica = make_latent_pipeline("ica", k_ica)
         grid_ica = {"clf__C": Cs}
@@ -295,31 +297,34 @@ def nested_cv_classifiers(
         params_ica.append({**gs_ica.best_params_, "ica_n_components_selected": k_ica})
         meta_ica.append({**diag_ica, "k_selected": int(k_ica)})
 
-    return (
-        NestedCVResult(
-            "edges_elasticnet",
-            np.array(aucs_edges),
-            params_edges,
-            y_true_oof=y_oof.copy(),
-            proba_oof=oof_e,
-        ),
-        NestedCVResult(
+    res_edges = NestedCVResult(
+        "edges_logistic",
+        np.array(aucs_edges),
+        params_edges,
+        y_true_oof=y_oof.copy(),
+        proba_oof=oof_e,
+    )
+    res_fa: NestedCVResult | None
+    if include_fa:
+        res_fa = NestedCVResult(
             "fa_logistic",
             np.array(aucs_fa),
             params_fa,
             y_true_oof=y_oof.copy(),
             proba_oof=oof_fa,
             meta_per_fold=meta_fa,
-        ),
-        NestedCVResult(
-            "ica_logistic",
-            np.array(aucs_ica),
-            params_ica,
-            y_true_oof=y_oof.copy(),
-            proba_oof=oof_ica,
-            meta_per_fold=meta_ica,
-        ),
+        )
+    else:
+        res_fa = None
+    res_ica = NestedCVResult(
+        "ica_logistic",
+        np.array(aucs_ica),
+        params_ica,
+        y_true_oof=y_oof.copy(),
+        proba_oof=oof_ica,
+        meta_per_fold=meta_ica,
     )
+    return res_edges, res_fa, res_ica
 
 
 def bootstrap_oof_auc_difference(
@@ -428,20 +433,155 @@ def pairwise_auc_tests(
     }
 
 
+def compute_h1_stability_tests(
+    res_edges: NestedCVResult,
+    res_fa: NestedCVResult | None,
+    res_ica: NestedCVResult,
+) -> dict[str, Any]:
+    """Compare **stability** of nested-CV AUC across outer folds (lower spread ⇒ more stable).
+
+    Uses Levene and Fligner on per-fold AUC vectors (same folds across models compared).
+    When *res_fa* is omitted, only edges vs ICA are tested (two samples).
+    """
+    ae = np.asarray(res_edges.outer_aucs, dtype=np.float64)
+    ai = np.asarray(res_ica.outer_aucs, dtype=np.float64)
+
+    def _row(name: str, a: np.ndarray) -> dict[str, Any]:
+        m = float(np.mean(a))
+        s = float(np.std(a, ddof=1)) if len(a) > 1 else 0.0
+        return {
+            "model": name,
+            "auc_mean": m,
+            "auc_std": s,
+            "auc_cv": float(s / m) if m > 1e-8 else None,
+            "auc_iqr": float(np.subtract(*np.percentile(a, [75, 25]))),
+            "auc_range": float(np.max(a) - np.min(a)),
+        }
+
+    rows = [_row(res_edges.name, ae)]
+    auc_groups: list[np.ndarray] = [ae]
+    if res_fa is not None:
+        af = np.asarray(res_fa.outer_aucs, dtype=np.float64)
+        rows.append(_row(res_fa.name, af))
+        auc_groups.append(af)
+    rows.append(_row(res_ica.name, ai))
+    auc_groups.append(ai)
+
+    le = stats.levene(*auc_groups, center="mean")
+    fl = stats.fligner(*auc_groups, center="median")
+    return {
+        "per_model": rows,
+        "levene_statistic": float(le.statistic),
+        "levene_pvalue": float(le.pvalue),
+        "fligner_statistic": float(fl.statistic),
+        "fligner_pvalue": float(fl.pvalue),
+        "n_outer_folds": int(len(ae)),
+        "note": (
+            "Levene/Fligner: H0 equal spread of outer-fold AUCs across models. "
+            "Low p suggests different fold-to-fold stability (variance of AUC)."
+        ),
+    }
+
+
+def _median_hyperparams_edges(params: list[dict[str, Any]]) -> dict[str, float]:
+    """Median CV ``clf__C`` for edge logistic; supports legacy elastic-net keys if present."""
+    if params and "clf__C" in params[0]:
+        return {"clf__C": float(np.median([float(p["clf__C"]) for p in params]))}
+    alphas = [float(p["clf__alpha"]) for p in params]
+    l1s = [float(p["clf__l1_ratio"]) for p in params]
+    return {
+        "clf__alpha": float(np.median(alphas)),
+        "clf__l1_ratio": float(np.median(l1s)),
+    }
+
+
+def _median_hyperparams_latent(params: list[dict[str, Any]]) -> tuple[int, float]:
+    ks: list[int] = []
+    cs: list[float] = []
+    for p in params:
+        k = int(p.get("fa_n_components_selected", p.get("ica_n_components_selected", 0)))
+        ks.append(k)
+        cs.append(float(p["clf__C"]))
+    return int(round(float(np.median(ks)))), float(np.median(cs))
+
+
+def fit_h1_interpretability_refits(
+    X: np.ndarray,
+    y: np.ndarray,
+    res_edges: NestedCVResult,
+    res_fa: NestedCVResult | None,
+    res_ica: NestedCVResult,
+) -> dict[str, Any]:
+    """Refit pipelines on **all** subjects using median CV-selected hyperparameters.
+
+    Exploratory visualization only: optimistic vs nested-CV AUC; use for **relative**
+    coefficient structure (edges vs latent factors), not for inference.
+    """
+    y = np.asarray(y).astype(int)
+    X = np.asarray(X, dtype=np.float64)
+
+    hp_e = _median_hyperparams_edges(res_edges.best_params_per_fold)
+    pipe_e = make_edge_pipeline()
+    pipe_e.set_params(**hp_e)
+    pipe_e.fit(X, y)
+    clf_e = pipe_e.named_steps["clf"]
+    coef_edges = np.asarray(clf_e.coef_, dtype=np.float64).ravel()
+
+    out: dict[str, Any] = {
+        "hyperparams_edges": hp_e,
+        "coef_edges": coef_edges,
+    }
+
+    if res_fa is not None:
+        k_fa, c_fa = _median_hyperparams_latent(res_fa.best_params_per_fold)
+        pipe_fa = make_latent_pipeline("fa", k_fa)
+        pipe_fa.set_params(clf__C=c_fa)
+        pipe_fa.fit(X, y)
+        coef_fa = np.asarray(
+            pipe_fa.named_steps["clf"].coef_, dtype=np.float64
+        ).ravel()
+        fa_comp = np.asarray(
+            pipe_fa.named_steps["latent"].fa_.components_, dtype=np.float64
+        )
+        out["hyperparams_fa"] = {"n_components": k_fa, "clf__C": c_fa}
+        out["coef_fa_latent"] = coef_fa
+        out["fa_components"] = fa_comp
+
+    k_ica, c_ica = _median_hyperparams_latent(res_ica.best_params_per_fold)
+    pipe_ica = make_latent_pipeline("ica", k_ica)
+    pipe_ica.set_params(clf__C=c_ica)
+    pipe_ica.fit(X, y)
+    coef_ica = np.asarray(
+        pipe_ica.named_steps["clf"].coef_, dtype=np.float64
+    ).ravel()
+    ica_comp = np.asarray(
+        pipe_ica.named_steps["latent"].ica_.components_, dtype=np.float64
+    )
+
+    out["hyperparams_ica"] = {"n_components": k_ica, "clf__C": c_ica}
+    out["coef_ica_latent"] = coef_ica
+    out["ica_components"] = ica_comp
+    return out
+
+
 def all_pairwise_auc_tests(
     res_e: NestedCVResult,
-    res_fa: NestedCVResult,
+    res_fa: NestedCVResult | None,
     res_ica: NestedCVResult,
     *,
     n_bootstrap: int = 10000,
     n_perm_y: int = 5000,
     random_state: int = 0,
 ) -> dict[str, Any]:
-    pairs = [
-        (res_fa, res_e, "fa_vs_edges"),
+    pairs: list[tuple[NestedCVResult, NestedCVResult, str]] = [
         (res_ica, res_e, "ica_vs_edges"),
-        (res_fa, res_ica, "fa_vs_ica"),
     ]
+    if res_fa is not None:
+        pairs = [
+            (res_fa, res_e, "fa_vs_edges"),
+            (res_ica, res_e, "ica_vs_edges"),
+            (res_fa, res_ica, "fa_vs_ica"),
+        ]
     out: dict[str, Any] = {}
     for i, (ra, rb, key) in enumerate(pairs):
         out[key] = pairwise_auc_tests(

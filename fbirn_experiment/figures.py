@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,12 +14,41 @@ from fbirn_experiment.fnc import symmetric_matrix_from_upper_vec
 from fbirn_experiment.h1_cv import NestedCVResult
 
 
+def _truncate_icn_label(s: str, max_len: int = 26) -> str:
+    s = str(s).strip()
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 1] + "…"
+
+
+def _h1_latent_axis_prefix(method: str) -> str:
+    """FA → *Factor*; ICA → *Component* (sklearn ordering)."""
+    m = str(method).strip().upper()
+    return "Component" if m == "ICA" else "Factor"
+
+
+def _h1_icn_pair_label(
+    i: int,
+    j: int,
+    icn_labels: np.ndarray | Sequence[str] | None,
+) -> str:
+    """One line: indices plus optional NeuroMark-style ICN names."""
+    if icn_labels is None:
+        return f"ICN {i}–{j}"
+    n = len(icn_labels)
+    if i < 0 or j < 0 or i >= n or j >= n:
+        return f"ICN {i}–{j}"
+    li = _truncate_icn_label(str(icn_labels[i]))
+    lj = _truncate_icn_label(str(icn_labels[j]))
+    return f"ICN {i} ({li}) – ICN {j} ({lj})"
+
+
 # ── H1 ───────────────────────────────────────────────────────────────────────
 
 
 def plot_h1_fold_aucs(
     res_edges: NestedCVResult,
-    res_fa: NestedCVResult,
+    res_fa: NestedCVResult | None,
     res_ica: NestedCVResult,
     out_path: Path,
     *,
@@ -28,9 +57,13 @@ def plot_h1_fold_aucs(
     folds = np.arange(1, len(res_edges.outer_aucs) + 1)
     w = 0.22
     fig, ax = plt.subplots(figsize=(9, 4))
-    ax.bar(folds - w, res_edges.outer_aucs, width=w, label="Edges (elastic net)")
-    ax.bar(folds, res_fa.outer_aucs, width=w, label="FA + logistic")
-    ax.bar(folds + w, res_ica.outer_aucs, width=w, label="ICA + logistic")
+    if res_fa is None:
+        ax.bar(folds - w / 2, res_edges.outer_aucs, width=w, label="Edges (L2 logistic)")
+        ax.bar(folds + w / 2, res_ica.outer_aucs, width=w, label="ICA + logistic")
+    else:
+        ax.bar(folds - w, res_edges.outer_aucs, width=w, label="Edges (L2 logistic)")
+        ax.bar(folds, res_fa.outer_aucs, width=w, label="FA + logistic")
+        ax.bar(folds + w, res_ica.outer_aucs, width=w, label="ICA + logistic")
     ax.set_xlabel("Outer CV fold")
     ax.set_ylabel("ROC-AUC")
     ax.set_title("H1: Nested CV performance by fold")
@@ -44,7 +77,7 @@ def plot_h1_fold_aucs(
 
 def plot_h1_oof_roc(
     res_edges: NestedCVResult,
-    res_fa: NestedCVResult,
+    res_fa: NestedCVResult | None,
     res_ica: NestedCVResult,
     out_path: Path,
     *,
@@ -54,11 +87,13 @@ def plot_h1_oof_roc(
 
     y = np.asarray(res_edges.y_true_oof).astype(int)
     fig, ax = plt.subplots(figsize=(5.2, 5))
-    for name, p, color in (
+    curves: list[tuple[str, np.ndarray, str]] = [
         ("Edges (OOF)", res_edges.proba_oof, "#1f77b4"),
-        ("FA (OOF)", res_fa.proba_oof, "#ff7f0e"),
         ("ICA (OOF)", res_ica.proba_oof, "#2ca02c"),
-    ):
+    ]
+    if res_fa is not None:
+        curves.insert(1, ("FA (OOF)", res_fa.proba_oof, "#ff7f0e"))
+    for name, p, color in curves:
         fpr, tpr, _ = roc_curve(y, p)
         a = roc_auc_score(y, p)
         ax.plot(fpr, tpr, color=color, lw=2, label=f"{name} (AUC = {a:.3f})")
@@ -73,6 +108,322 @@ def plot_h1_oof_roc(
     fig.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
+
+
+def plot_h1_stability_violin(
+    res_edges: NestedCVResult,
+    res_fa: NestedCVResult | None,
+    res_ica: NestedCVResult,
+    stability: dict,
+    out_path: Path,
+    *,
+    dpi: int = 150,
+) -> None:
+    """Violin plot of outer-fold AUCs; annotate Levene test for equal spread."""
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    data = [np.asarray(res_edges.outer_aucs, dtype=np.float64)]
+    labels = ["Edges\n(L2 logistic)"]
+    if res_fa is not None:
+        data.append(np.asarray(res_fa.outer_aucs, dtype=np.float64))
+        labels.append("FA +\nlogistic")
+    data.append(np.asarray(res_ica.outer_aucs, dtype=np.float64))
+    labels.append("ICA +\nlogistic")
+    n_v = len(data)
+    positions = list(range(1, n_v + 1))
+    parts = ax.violinplot(
+        data,
+        positions=positions,
+        widths=0.55,
+        showmeans=True,
+        showmedians=False,
+        showextrema=True,
+    )
+    for b in parts["bodies"]:
+        b.set_alpha(0.55)
+    ax.set_xticks(positions)
+    ax.set_xticklabels(labels, fontsize=9)
+    ax.set_ylabel("ROC-AUC (outer test fold)")
+    ax.set_title("H1: Stability of AUC across outer folds")
+    ax.set_ylim(0.0, 1.02)
+    p_lev = float(stability.get("levene_pvalue", 1.0))
+    p_fl = float(stability.get("fligner_pvalue", 1.0))
+    ax.text(
+        0.02,
+        0.02,
+        f"Levene test (equal spread): p = {p_lev:.3g}\n"
+        f"Fligner–Killeen: p = {p_fl:.3g}",
+        transform=ax.transAxes,
+        fontsize=8,
+        verticalalignment="bottom",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.35),
+    )
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=dpi)
+    plt.close(fig)
+
+
+def plot_h1_edge_top_coefficients(
+    ii: np.ndarray,
+    jj: np.ndarray,
+    coef_edges: np.ndarray,
+    out_path: Path,
+    *,
+    top_k: int = 45,
+    dpi: int = 150,
+    icn_labels: np.ndarray | Sequence[str] | None = None,
+) -> None:
+    """Top |logistic coefficients| on edge features (FNC upper triangle)."""
+    coef_edges = np.asarray(coef_edges, dtype=np.float64).ravel()
+    n = min(top_k, coef_edges.shape[0])
+    order = np.argsort(-np.abs(coef_edges))[:n]
+    vals = coef_edges[order]
+    labs = [
+        _h1_icn_pair_label(int(ii[idx]), int(jj[idx]), icn_labels)
+        for idx in order
+    ]
+    fig, ax = plt.subplots(figsize=(9, max(4.0, 0.14 * n)))
+    y = np.arange(n)
+    colors = np.where(vals >= 0, "#1f77b4", "#d62728")
+    ax.barh(y, vals, color=colors, height=0.75)
+    ax.set_yticks(y)
+    tick_fs = 6 if icn_labels is not None else 7
+    ax.set_yticklabels(labs, fontsize=tick_fs)
+    ax.axvline(0, color="k", lw=0.6)
+    ax.set_xlabel("Coefficient (L2 logistic, full-sample refit)")
+    ax.set_title(f"H1 interpretability: top {n} edge coefficients (|value|)")
+    ax.invert_yaxis()
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=dpi)
+    plt.close(fig)
+
+
+def plot_h1_latent_coefficients_and_loadings(
+    method: str,
+    coef_latent: np.ndarray,
+    components: np.ndarray,
+    ii: np.ndarray,
+    jj: np.ndarray,
+    out_path: Path,
+    *,
+    n_icns: int | None = None,
+    dpi: int = 1000,
+    icn_domain: np.ndarray | Sequence[str] | None = None,
+    matrix_col_inches: float = 2.12,
+    matrix_row_inches: float = 1.58,
+    matrix_hspace: float = 0.09,
+    matrix_wspace: float = 0.09,
+) -> None:
+    """Logistic coefficients per latent dim + symmetric ICN×ICN loading matrices.
+
+    Renders **every** row of *components* as an ``n_icns``×``n_icns`` matrix (same order
+    as sklearn factors/components). Each row is mapped from the FNC upper-triangle
+    vector via ``symmetric_matrix_from_upper_vec``.
+
+    If *icn_domain* has length ``n_icns`` (one label per ICN, same as H3), matrix axes
+    use **domain** tick positions and labels like ``plot_h3_loadings_symmetric_matrices``.
+
+    *matrix_col_inches* / *matrix_row_inches* scale the matplotlib figure size per matrix
+    column/row (larger values → bigger 105×105 panels on screen and in the saved PNG at
+    the same ``dpi``). *matrix_hspace* / *matrix_wspace* set subplot gaps in the matrix
+    grid (fraction of average subplot height/width; smaller → tighter packing).
+    """
+    coef_latent = np.asarray(coef_latent, dtype=np.float64).ravel()
+    comp = np.asarray(components, dtype=np.float64)
+    dim_prefix = _h1_latent_axis_prefix(method)
+    k = coef_latent.shape[0]
+    if comp.shape[0] != k:
+        comp = comp[:k]
+    ii = np.asarray(ii, dtype=np.int64)
+    jj = np.asarray(jj, dtype=np.int64)
+    if n_icns is None:
+        n_icns = int(max(ii.max(), jj.max()) + 1)
+
+    dom_names: list[str] | None = None
+    dom_ticks: list[float] | None = None
+    dom_seps: list[float] | None = None
+    if icn_domain is not None:
+        dom_arr = np.asarray(icn_domain).reshape(-1)
+        if dom_arr.shape[0] == n_icns:
+            if dom_arr.dtype == object:
+                dom_arr = dom_arr.astype(str)
+            dom_names, dom_ticks, dom_seps = _domain_tick_labels(dom_arr)
+
+    show = np.arange(k, dtype=np.int64)
+    n_show = k
+
+    matrices: list[np.ndarray] = []
+    for j in range(n_show):
+        vec = comp[int(show[j]), :]
+        matrices.append(
+            symmetric_matrix_from_upper_vec(vec, ii, jj, n_icns),
+        )
+    vmax = float(np.max(np.abs(np.stack(matrices, axis=0)))) if matrices else 1.0
+    if not np.isfinite(vmax) or vmax < 1e-15:
+        vmax = 1.0
+
+    # Grid layout: ICA uses up to 10 matrices per row; FA keeps a compact sqrt-ish column count.
+    if dim_prefix == "Component":
+        ncol = min(10, n_show)
+    else:
+        ncol = int(min(8, max(3, int(np.ceil(np.sqrt(n_show * 1.2))))))
+        ncol = min(ncol, n_show)
+    nrow = int(np.ceil(n_show / ncol))
+
+    # Figure size (inches): larger panels → each 105×105 matrix uses more canvas area
+    # at the same DPI (or combine with higher ``dpi`` for more pixels).
+    fig_w = 1.15 + float(matrix_col_inches) * ncol
+    fig_h = 1.02 + float(matrix_row_inches) * nrow + 0.55
+    fig = plt.figure(figsize=(fig_w, fig_h), layout="constrained")
+    # Taller top row so the coefficient bar chart is easier to read.
+    gs = fig.add_gridspec(2, 1, height_ratios=[0.52, nrow * 1.08])
+    ax0 = fig.add_subplot(gs[0, 0])
+    ax0.bar(np.arange(k), coef_latent, color="#555555", edgecolor="k", linewidth=0.25)
+    ax0.axhline(0, color="k", lw=0.55)
+    ax0.set_xticks(np.arange(k))
+    xtick_fs = 8 if k > 18 else 9
+    ax0.set_xticklabels(
+        [f"{dim_prefix} {d + 1}" for d in range(k)],
+        rotation=90,
+        ha="center",
+        va="top",
+        fontsize=xtick_fs,
+    )
+    ax0.set_ylabel("Logistic coef.", fontsize=10)
+    ax0.set_title(f"{method}: weight per {dim_prefix.lower()}", fontsize=11)
+    ax0.tick_params(axis="y", labelsize=9)
+
+    gs_mat = gs[1, 0].subgridspec(
+        nrow,
+        ncol,
+        hspace=float(matrix_hspace),
+        wspace=float(matrix_wspace),
+    )
+    tick_stride = max(1, n_icns // 5)
+    tick_idx = np.arange(0, n_icns, tick_stride)
+    dom_lab_fs = 3.5 if (dom_names is not None and len(dom_names) > 12) else 5
+    dom_axis_fs = 6.5
+    axes_mat: list = []
+    last_im = None
+    for idx in range(n_show):
+        axm = fig.add_subplot(gs_mat[idx // ncol, idx % ncol])
+        axes_mat.append(axm)
+        last_im = axm.imshow(
+            matrices[idx],
+            cmap="RdBu_r",
+            vmin=-vmax,
+            vmax=vmax,
+            aspect="equal",
+            origin="upper",
+            interpolation="nearest",
+        )
+        axm.set_title(f"{dim_prefix} {int(show[idx]) + 1}", fontsize=8, pad=2)
+        row, col = idx // ncol, idx % ncol
+        if dom_names is not None:
+            axm.set_xticks(dom_ticks)
+            axm.set_xticklabels(
+                dom_names, rotation=90, ha="right", fontsize=dom_lab_fs,
+            )
+            axm.set_yticks(dom_ticks)
+            axm.set_yticklabels(dom_names, fontsize=dom_lab_fs)
+            for s in dom_seps or []:
+                axm.axhline(s, color="white", lw=0.45)
+                axm.axvline(s, color="white", lw=0.45)
+            axm.set_xlabel("Domain", fontsize=dom_axis_fs)
+            axm.set_ylabel("Domain", fontsize=dom_axis_fs)
+        else:
+            axm.set_xticks(tick_idx)
+            axm.set_yticks(tick_idx)
+            axm.tick_params(axis="both", labelsize=7)
+            if row == nrow - 1:
+                axm.set_xlabel("ICN index", fontsize=8)
+            else:
+                axm.set_xlabel("")
+                axm.tick_params(axis="x", labelbottom=False)
+            if col == 0:
+                axm.set_ylabel("ICN index", fontsize=8)
+            else:
+                axm.set_ylabel("")
+                axm.tick_params(axis="y", labelleft=False)
+
+    cbar = fig.colorbar(
+        last_im, ax=axes_mat, shrink=0.45, fraction=0.046,
+    )
+    cbar.set_label("Loading", fontsize=10)
+    cbar.ax.tick_params(labelsize=9)
+
+    fig.suptitle(
+        f"H1 interpretability: {method} — all {dim_prefix.lower()}s as "
+        f"{n_icns}×{n_icns} FNC matrices (median-CV refit)",
+        fontsize=11,
+    )
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+
+
+def regenerate_h1_latent_interpretability_figures(
+    artifacts_dir: Path | str,
+    figures_dir: Path | str | None = None,
+    *,
+    dpi: int = 150,
+    **plot_kw: Any,
+) -> None:
+    """Redraw latent interpretability PNGs from artifacts (ICA always; FA if saved).
+
+    Reads:
+
+    - ``artifacts_dir / "fnc_edges_bundle.npz"`` — ``triu_i``, ``triu_j``, ``icn_domain``
+    - ``artifacts_dir / "h1_interpretability_coefs.npz"`` — coefs and ``components_``
+
+    No time courses or nested CV re-run required. Optional ``plot_kw`` is forwarded to
+    ``plot_h1_latent_coefficients_and_loadings`` (e.g. ``matrix_col_inches=2.3``).
+    """
+    artifacts_dir = Path(artifacts_dir)
+    fig_dir = Path(figures_dir) if figures_dir is not None else artifacts_dir.parent / "figures"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+
+    bundle_path = artifacts_dir / "fnc_edges_bundle.npz"
+    coefs_path = artifacts_dir / "h1_interpretability_coefs.npz"
+    if not bundle_path.is_file():
+        raise FileNotFoundError(
+            f"Expected {bundle_path} (save from a full run with artifacts enabled).",
+        )
+    if not coefs_path.is_file():
+        raise FileNotFoundError(
+            f"Expected {coefs_path} (H1 interpretability refit artifacts).",
+        )
+
+    b = np.load(bundle_path, allow_pickle=True)
+    ii = np.asarray(b["triu_i"], dtype=np.int64)
+    jj = np.asarray(b["triu_j"], dtype=np.int64)
+    icn_domain = np.asarray(b["icn_domain"])
+
+    z = np.load(coefs_path, allow_pickle=True)
+    fa_keys = {"coef_fa_latent", "fa_components"}.issubset(z.files)
+    if fa_keys and np.asarray(z["coef_fa_latent"]).size > 0:
+        plot_h1_latent_coefficients_and_loadings(
+            "FA",
+            np.asarray(z["coef_fa_latent"]),
+            np.asarray(z["fa_components"]),
+            ii,
+            jj,
+            fig_dir / "h1_fa_latent_interpretability.png",
+            icn_domain=icn_domain,
+            dpi=dpi,
+            **plot_kw,
+        )
+        print(f"Wrote {fig_dir / 'h1_fa_latent_interpretability.png'}")
+    plot_h1_latent_coefficients_and_loadings(
+        "ICA",
+        np.asarray(z["coef_ica_latent"]),
+        np.asarray(z["ica_components"]),
+        ii,
+        jj,
+        fig_dir / "h1_ica_latent_interpretability.png",
+        icn_domain=icn_domain,
+        dpi=dpi,
+        **plot_kw,
+    )
+    print(f"Wrote {fig_dir / 'h1_ica_latent_interpretability.png'}")
 
 
 # ── H2 ───────────────────────────────────────────────────────────────────────
@@ -364,7 +715,7 @@ def plot_h3_loadings_symmetric_matrices(
 def generate_all_figures(
     out_dir: Path,
     res_edges: NestedCVResult,
-    res_fa: NestedCVResult,
+    res_fa: NestedCVResult | None,
     res_ica: NestedCVResult,
     h2: dict,
     h3_summary: pd.DataFrame,
@@ -374,11 +725,51 @@ def generate_all_figures(
     n_icns: int,
     icn_domain: np.ndarray | None = None,
     h3_domain_pair_summary: pd.DataFrame | None = None,
+    *,
+    h1_stability: dict | None = None,
+    h1_interpretability: dict | None = None,
 ) -> None:
     out_dir = Path(out_dir) / "figures"
     out_dir.mkdir(parents=True, exist_ok=True)
     plot_h1_fold_aucs(res_edges, res_fa, res_ica, out_dir / "h1_nestedcv_auc_by_fold.png")
     plot_h1_oof_roc(res_edges, res_fa, res_ica, out_dir / "h1_oof_roc.png")
+    if h1_stability is not None:
+        plot_h1_stability_violin(
+            res_edges,
+            res_fa,
+            res_ica,
+            h1_stability,
+            out_dir / "h1_auc_stability_violin.png",
+        )
+    if h1_interpretability is not None:
+        plot_h1_edge_top_coefficients(
+            ii,
+            jj,
+            h1_interpretability["coef_edges"],
+            out_dir / "h1_edge_top_coefficients.png",
+            icn_labels=icn_domain,
+        )
+        if "coef_fa_latent" in h1_interpretability:
+            plot_h1_latent_coefficients_and_loadings(
+                "FA",
+                h1_interpretability["coef_fa_latent"],
+                h1_interpretability["fa_components"],
+                ii,
+                jj,
+                out_dir / "h1_fa_latent_interpretability.png",
+                n_icns=n_icns,
+                icn_domain=icn_domain,
+            )
+        plot_h1_latent_coefficients_and_loadings(
+            "ICA",
+            h1_interpretability["coef_ica_latent"],
+            h1_interpretability["ica_components"],
+            ii,
+            jj,
+            out_dir / "h1_ica_latent_interpretability.png",
+            n_icns=n_icns,
+            icn_domain=icn_domain,
+        )
     plot_h2_permutation_null(
         h2["null_delta_mean_abs_d"],
         float(h2["observed_delta_mean_abs_d"]),
