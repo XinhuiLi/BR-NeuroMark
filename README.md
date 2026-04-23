@@ -20,10 +20,6 @@ Multiverse / specification-curve analysis (Steegen et al., 2016; Simonsohn et al
 
 **Joint specification-count test** (`figures/mv_joint_permutation_test.csv`): for α = 0.05, the number of favourable specs **exceeds** the binomial null for **all three** hypotheses (including H1), which is consistent with **some** sensitivity of the global null to multiple testing structure—not with blanket latent superiority for H1.
 
-**Study design (workflow schematic):** `figures/study_design_workflow.png` — regenerate with `python -m fbirn_experiment.cli study-design` (or `python -m fbirn_experiment.study_design_figure -o …`).
-
-![Study design workflow](figures/study_design_workflow.png)
-
 ---
 
 ## Full multiverse in this repo (`results/multiverse_full/`)
@@ -59,7 +55,13 @@ Joint binomial test (`results/multiverse_full/figures/mv_joint_permutation_test.
 
 ---
 
-## Data figures
+## Study design
+
+![Study design](figures/study_design.png)
+
+---
+
+## Data
 
 Covariate / confound distributions (`figures/confound_distributions.png`) and group-mean functional connectivity (Pearson *z*) for controls vs schizophrenia patients (`figures/mean_fnc_pearson_z_hc_sz.png`). Regenerate with `python -m fbirn_experiment.cli plot-confounds` and `python -m fbirn_experiment.cli mean-fnc-matrices`.
 
