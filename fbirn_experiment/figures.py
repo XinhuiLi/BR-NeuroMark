@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
@@ -58,12 +60,12 @@ def plot_h1_fold_aucs(
     w = 0.22
     fig, ax = plt.subplots(figsize=(9, 4))
     if res_fa is None:
-        ax.bar(folds - w / 2, res_edges.outer_aucs, width=w, label="Edges (L2 logistic)")
-        ax.bar(folds + w / 2, res_ica.outer_aucs, width=w, label="ICA + logistic")
+        ax.bar(folds - w / 2, res_edges.outer_aucs, width=w, label="Edges")
+        ax.bar(folds + w / 2, res_ica.outer_aucs, width=w, label="ICA")
     else:
-        ax.bar(folds - w, res_edges.outer_aucs, width=w, label="Edges (L2 logistic)")
-        ax.bar(folds, res_fa.outer_aucs, width=w, label="FA + logistic")
-        ax.bar(folds + w, res_ica.outer_aucs, width=w, label="ICA + logistic")
+        ax.bar(folds - w, res_edges.outer_aucs, width=w, label="Edges")
+        ax.bar(folds, res_fa.outer_aucs, width=w, label="FA")
+        ax.bar(folds + w, res_ica.outer_aucs, width=w, label="ICA")
     ax.set_xlabel("Outer CV fold")
     ax.set_ylabel("ROC-AUC")
     ax.set_title("H1: Nested CV performance by fold")
@@ -122,12 +124,12 @@ def plot_h1_stability_violin(
     """Violin plot of outer-fold AUCs; annotate Levene test for equal spread."""
     fig, ax = plt.subplots(figsize=(7, 4.5))
     data = [np.asarray(res_edges.outer_aucs, dtype=np.float64)]
-    labels = ["Edges\n(L2 logistic)"]
+    labels = ["Edges"]
     if res_fa is not None:
         data.append(np.asarray(res_fa.outer_aucs, dtype=np.float64))
-        labels.append("FA +\nlogistic")
+        labels.append("FA")
     data.append(np.asarray(res_ica.outer_aucs, dtype=np.float64))
-    labels.append("ICA +\nlogistic")
+    labels.append("ICA")
     n_v = len(data)
     positions = list(range(1, n_v + 1))
     parts = ax.violinplot(
@@ -475,6 +477,13 @@ def plot_h2_abs_d_violin(
 # ── H3 ───────────────────────────────────────────────────────────────────────
 
 
+def _h3_plot_labels(decomposition: str) -> tuple[str, str, str, str]:
+    """Return (method_name, xlabel_dim, heatmap_row_prefix, matrix_title_fragment)."""
+    if str(decomposition).strip().lower() == "fa":
+        return "FA", "Factor (1-based)", "F", "|FA loadings|"
+    return "ICA", "Component (1-based)", "C", "|ICA loadings|"
+
+
 def _significance_bracket(
     ax: plt.Axes,
     x1: float,
@@ -507,12 +516,14 @@ def plot_h3_summary_bars(
     summary: pd.DataFrame,
     out_path: Path,
     *,
+    decomposition: str = "ica",
     dpi: int = 150,
 ) -> None:
     """
     Grouped bar chart: between-domain vs within-domain mean |loading| per factor.
     Paired Wilcoxon across factors tests whether the two distributions differ.
     """
+    method, xdim, _, _ = _h3_plot_labels(decomposition)
     df = summary.copy()
     n = len(df)
     x = np.arange(n)
@@ -527,9 +538,9 @@ def plot_h3_summary_bars(
     bars_w = ax.bar(x + w / 2, within_vals, width=w, label="Within-domain", color="#ff7f0e")
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.set_xlabel("Factor (1-based)")
+    ax.set_xlabel(xdim)
     ax.set_ylabel("Mean |loading|")
-    ax.set_title("H3: Mean absolute loadings by edge class (exploratory FA)")
+    ax.set_title(f"H3: Mean absolute loadings by edge class (exploratory {method})")
 
     valid = np.isfinite(between_vals) & np.isfinite(within_vals)
     if valid.sum() >= 5:
@@ -560,18 +571,21 @@ def plot_h3_domain_pair_heatmap(
     domain_pair_summary: pd.DataFrame,
     out_path: Path,
     *,
+    decomposition: str = "ica",
     dpi: int = 150,
 ) -> None:
     """
     Heatmap: factors (rows) x hypothesis domain pairs (columns), cell value =
     mean |loading| for edges in that pair.
     """
+    _, _, row_prefix, _ = _h3_plot_labels(decomposition)
+    row_lbl = "Factor" if row_prefix == "F" else "Component"
     if domain_pair_summary.empty:
         return
     pivot = domain_pair_summary.pivot_table(
         index="factor", columns="pair_label", values="mean_abs_loading"
     )
-    pivot.index = [f"F{int(i) + 1}" for i in pivot.index]
+    pivot.index = [f"{row_prefix}{int(i) + 1}" for i in pivot.index]
 
     fig, ax = plt.subplots(figsize=(max(6, 0.9 * len(pivot.columns)), max(5, 0.35 * len(pivot))))
     im = ax.imshow(pivot.values, cmap="YlOrRd", aspect="auto", interpolation="nearest")
@@ -580,8 +594,8 @@ def plot_h3_domain_pair_heatmap(
     ax.set_yticks(range(len(pivot.index)))
     ax.set_yticklabels(pivot.index, fontsize=8)
     ax.set_xlabel("Hypothesis domain pair")
-    ax.set_ylabel("Factor")
-    ax.set_title("H3: Mean |loading| by factor and hypothesis domain pair")
+    ax.set_ylabel(row_lbl)
+    ax.set_title(f"H3: Mean |loading| by {row_lbl.lower()} and hypothesis domain pair")
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Mean |loading|")
     fig.tight_layout()
     fig.savefig(out_path, dpi=dpi)
@@ -594,6 +608,7 @@ def plot_h3_domain_pair_bars(
     within_baseline: float,
     out_path: Path,
     *,
+    decomposition: str = "ica",
     dpi: int = 150,
 ) -> None:
     """
@@ -618,7 +633,8 @@ def plot_h3_domain_pair_bars(
     ax.axhline(within_baseline, ls="--", lw=1, color="#ff7f0e", label="Within-domain avg")
     ax.set_xticks(x)
     ax.set_xticklabels(agg.index, rotation=35, ha="right", fontsize=9)
-    ax.set_ylabel("Mean |loading| (averaged across factors)")
+    dim_word = "factors" if str(decomposition).strip().lower() == "fa" else "components"
+    ax.set_ylabel(f"Mean |loading| (averaged across {dim_word})")
     ax.set_title("H3: Hypothesis domain-pair loadings vs. baselines")
     ax.legend(fontsize=8, loc="upper right")
     fig.tight_layout()
@@ -662,6 +678,7 @@ def plot_h3_loadings_symmetric_matrices(
     out_dir: Path,
     icn_domain: np.ndarray | None = None,
     *,
+    decomposition: str = "ica",
     dpi: int = 150,
     prefix: str = "h3_fnc_matrix_factor",
 ) -> None:
@@ -672,6 +689,8 @@ def plot_h3_loadings_symmetric_matrices(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     n_f = loadings.shape[0]
+    _, _, row_prefix, load_fragment = _h3_plot_labels(decomposition)
+    dim_word = "factor" if row_prefix == "F" else "component"
     vmax = float(np.percentile(np.abs(loadings), 99.5)) if loadings.size else 1.0
     if vmax <= 0:
         vmax = 1.0
@@ -687,7 +706,10 @@ def plot_h3_loadings_symmetric_matrices(
         )
         fig, ax = plt.subplots(figsize=(7.2, 6))
         im = ax.imshow(mat, cmap="Reds", vmin=0.0, vmax=vmax, interpolation="nearest")
-        ax.set_title(f"H3: |FA loadings| as FNC matrix — factor {f + 1}", fontsize=14)
+        ax.set_title(
+            f"H3: {load_fragment} as FNC matrix — {dim_word} {f + 1}",
+            fontsize=14,
+        )
 
         if dom_names is not None:
             ax.set_xticks(dom_ticks)
@@ -728,6 +750,7 @@ def generate_all_figures(
     *,
     h1_stability: dict | None = None,
     h1_interpretability: dict | None = None,
+    h3_decomposition: str = "ica",
 ) -> None:
     out_dir = Path(out_dir) / "figures"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -781,7 +804,11 @@ def generate_all_figures(
         h2["mask_within"],
         out_dir / "h2_abs_cohen_d_by_edge_type.png",
     )
-    plot_h3_summary_bars(h3_summary, out_dir / "h3_mean_abs_loading_by_class.png")
+    plot_h3_summary_bars(
+        h3_summary,
+        out_dir / "h3_mean_abs_loading_by_class.png",
+        decomposition=h3_decomposition,
+    )
     plot_h3_loadings_symmetric_matrices(
         h3_loadings,
         ii,
@@ -789,12 +816,14 @@ def generate_all_figures(
         n_icns,
         out_dir,
         icn_domain=icn_domain,
+        decomposition=h3_decomposition,
         prefix="h3_fnc_matrix_factor",
     )
     if h3_domain_pair_summary is not None and not h3_domain_pair_summary.empty:
         plot_h3_domain_pair_heatmap(
             h3_domain_pair_summary,
             out_dir / "h3_domain_pair_heatmap.png",
+            decomposition=h3_decomposition,
         )
         between_base = float(h3_summary["mean_abs_loading_between"].mean())
         within_base = float(h3_summary["mean_abs_loading_within"].mean())
@@ -803,4 +832,134 @@ def generate_all_figures(
             between_base,
             within_base,
             out_dir / "h3_domain_pair_bars.png",
+            decomposition=h3_decomposition,
         )
+
+
+def plot_group_mean_fnc_connectivity(
+    mean_hc: np.ndarray,
+    mean_sz: np.ndarray,
+    n_hc: int,
+    n_sz: int,
+    out_path: Path,
+    *,
+    icn_domain: np.ndarray | None = None,
+    dpi: int = 200,
+) -> None:
+    """HC mean, SZ mean, and SZ−HC difference heatmaps (Fisher *z* of Pearson *r*)."""
+    n_icns = mean_hc.shape[0]
+    if mean_sz.shape != mean_hc.shape:
+        raise ValueError("mean_hc and mean_sz must have the same shape.")
+
+    dom_names: list[str] | None
+    dom_ticks: list[float] | None
+    dom_seps: list[float] | None
+    if icn_domain is not None:
+        dom_arr = np.asarray(icn_domain).ravel()
+        if dom_arr.shape[0] != n_icns:
+            raise ValueError(
+                f"icn_domain length {dom_arr.shape[0]} does not match n_icns {n_icns}."
+            )
+        dom_names, dom_ticks, dom_seps = _domain_tick_labels(dom_arr)
+    else:
+        dom_names = dom_ticks = dom_seps = None
+
+    hc = np.array(mean_hc, dtype=np.float64, copy=True)
+    sz = np.array(mean_sz, dtype=np.float64, copy=True)
+    np.fill_diagonal(hc, np.nan)
+    np.fill_diagonal(sz, np.nan)
+    diff = sz - hc
+    np.fill_diagonal(diff, np.nan)
+
+    off_mean = np.concatenate([hc[~np.isnan(hc)], sz[~np.isnan(sz)]])
+    vmax_mean = float(np.nanmax(np.abs(off_mean))) if off_mean.size else 1.0
+    if not np.isfinite(vmax_mean) or vmax_mean < 1e-12:
+        vmax_mean = 1.0
+
+    off_diff = diff[~np.isnan(diff)]
+    vmax_diff = float(np.nanmax(np.abs(off_diff))) if off_diff.size else 1.0
+    if not np.isfinite(vmax_diff) or vmax_diff < 1e-12:
+        vmax_diff = 1.0
+
+    # Typography (large labels for slides / posters)
+    fs_title = 24
+    fs_suptitle = 28
+    fs_axis = 22
+    fs_dom_tick = 17 if dom_names is not None and len(dom_names) > 12 else 18
+    fs_idx_tick = 20
+    fs_cbar_label = 20
+    fs_cbar_ticks = 17
+
+    fig_w = min(38.0, 6.2 + 0.058 * n_icns * 3)
+    fig_h = min(16.0, 5.0 + 0.055 * n_icns)
+    fig, axes = plt.subplots(1, 3, figsize=(fig_w, fig_h))
+
+    cmap = mpl.colormaps["RdBu_r"].copy()
+    cmap.set_bad(color="#e0e0e0")
+
+    tick_stride = max(1, n_icns // 8)
+    tick_idx = np.arange(0, n_icns, tick_stride)
+
+    def _style_domain_axes(ax: Any) -> None:
+        assert dom_names is not None and dom_ticks is not None and dom_seps is not None
+        ax.set_xticks(dom_ticks)
+        ax.set_xticklabels(
+            dom_names, rotation=90, ha="right", fontsize=fs_dom_tick,
+        )
+        ax.set_yticks(dom_ticks)
+        ax.set_yticklabels(dom_names, fontsize=fs_dom_tick)
+        ax.set_xlabel("ICN domain / subdomain", fontsize=fs_axis)
+        ax.set_ylabel("ICN domain / subdomain", fontsize=fs_axis)
+        for s in dom_seps:
+            ax.axhline(s, color="white", lw=0.55)
+            ax.axvline(s, color="white", lw=0.55)
+
+    def _style_index_axes(ax: Any) -> None:
+        ax.set_xticks(tick_idx)
+        ax.set_yticks(tick_idx)
+        ax.tick_params(axis="both", labelsize=fs_idx_tick)
+        ax.set_xlabel("ICN index", fontsize=fs_axis)
+        ax.set_ylabel("ICN index", fontsize=fs_axis)
+
+    panels: list[tuple[Any, np.ndarray, str, float, str]] = [
+        (axes[0], hc, f"Controls (HC), n = {n_hc}", vmax_mean, "Mean Fisher z (Pearson r)"),
+        (axes[1], sz, f"Patients (SZ), n = {n_sz}", vmax_mean, "Mean Fisher z (Pearson r)"),
+        (
+            axes[2],
+            diff,
+            "Group difference (SZ − HC, Fisher z)",
+            vmax_diff,
+            "Δ Fisher z (SZ − HC)",
+        ),
+    ]
+
+    for ax, mat, title, vm, cbar_lbl in panels:
+        im = ax.imshow(
+            mat,
+            cmap=cmap,
+            vmin=-vm,
+            vmax=vm,
+            aspect="equal",
+            origin="upper",
+            interpolation="nearest",
+        )
+        ax.set_title(title, fontsize=fs_title)
+        if dom_names is not None:
+            _style_domain_axes(ax)
+        else:
+            _style_index_axes(ax)
+
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5.5%", pad=0.14)
+        cb = fig.colorbar(im, cax=cax)
+        cb.set_label(cbar_lbl, fontsize=fs_cbar_label)
+        cb.ax.tick_params(labelsize=fs_cbar_ticks)
+
+    fig.suptitle(
+        "Mean functional network connectivity (Fisher z of Pearson correlation)",
+        fontsize=fs_suptitle,
+        y=0.86,
+    )
+    fig.subplots_adjust(left=0.05, right=0.98, top=0.9, bottom=0.12, wspace=0.42)
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)

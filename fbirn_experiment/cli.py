@@ -13,6 +13,7 @@ from fbirn_experiment.config import (
     DEFAULT_OUTPUT_DIR,
     DEFAULT_TC_PATH,
 )
+from fbirn_experiment.confounds import DEFAULT_CONFOUND_COLS
 from fbirn_experiment.io_data import load_fbirn_tc_and_labels, load_npz, synthetic_dataset
 from fbirn_experiment.pipeline import run_experiment
 
@@ -20,13 +21,17 @@ from fbirn_experiment.pipeline import run_experiment
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "FBIRN ICN FNC experiment (H1: all edges L2 logistic vs ICA; optional FA; H2; H3 FA)."
+            "FBIRN ICN FNC experiment (H1: edges L2 logistic vs ICA; optional FA; H2; H3 ICA loadings)."
         ),
     )
     sub = parser.add_subparsers(dest="command")
     _add_run_parser(sub)
     _add_multiverse_parser(sub)
     _add_regen_h1_latent_figs_parser(sub)
+    _add_regen_multiverse_figs_parser(sub)
+    _add_study_design_parser(sub)
+    _add_mean_fnc_matrices_parser(sub)
+    _add_plot_confounds_parser(sub)
     _populate_run_args(parser)
 
     args = parser.parse_args()
@@ -34,6 +39,14 @@ def main() -> None:
         _run_multiverse_cmd(args)
     elif args.command == "regen-h1-latent-figs":
         _run_regen_h1_latent_figs_cmd(args)
+    elif args.command == "regen-multiverse-figs":
+        _run_regen_multiverse_figs_cmd(args)
+    elif args.command == "study-design":
+        _run_study_design_cmd(args)
+    elif args.command == "mean-fnc-matrices":
+        _run_mean_fnc_matrices_cmd(args)
+    elif args.command == "plot-confounds":
+        _run_plot_confounds_cmd(args)
     else:
         _run_main_cmd(args)
 
@@ -199,6 +212,186 @@ def _add_regen_h1_latent_figs_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_regen_multiverse_figs_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "regen-multiverse-figs",
+        help=(
+            "Regenerate multiverse PNG/CSV outputs from multiverse_results.csv "
+            "(no data load, no spec re-run)."
+        ),
+    )
+    p.add_argument(
+        "--multiverse-dir",
+        type=Path,
+        default=Path("results/multiverse"),
+        help=(
+            "Directory that contains multiverse_results.csv when --results-csv is omitted "
+            "(figures default to multiverse-dir/figures)."
+        ),
+    )
+    p.add_argument(
+        "--results-csv",
+        type=Path,
+        default=None,
+        help="Path to multiverse_results.csv (default: multiverse-dir/multiverse_results.csv).",
+    )
+    p.add_argument(
+        "--figures-dir",
+        type=Path,
+        default=None,
+        help="Output directory for figures/CSVs (default: parent of CSV / figures).",
+    )
+    p.add_argument("--dpi", type=int, default=200, help="Figure resolution for PNGs.")
+
+
+def _run_regen_multiverse_figs_cmd(args: argparse.Namespace) -> None:
+    from fbirn_experiment.multiverse_figures import regenerate_multiverse_figures  # noqa: PLC0415
+
+    if args.results_csv is not None:
+        csv_path = Path(args.results_csv)
+    else:
+        csv_path = Path(args.multiverse_dir) / "multiverse_results.csv"
+    fig_dir = Path(args.figures_dir) if args.figures_dir is not None else csv_path.parent / "figures"
+    regenerate_multiverse_figures(csv_path, figures_dir=fig_dir, dpi=int(args.dpi))
+
+
+def _add_study_design_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "study-design",
+        help="Write a schematic study-design / workflow PNG (no data load).",
+    )
+    p.add_argument(
+        "-o", "--out",
+        type=Path,
+        default=Path("figures/study_design_workflow.png"),
+        help="Output PNG path.",
+    )
+    p.add_argument("--dpi", type=int, default=300, help="Raster resolution.")
+
+
+def _run_study_design_cmd(args: argparse.Namespace) -> None:
+    from fbirn_experiment.study_design_figure import plot_study_design  # noqa: PLC0415
+
+    plot_study_design(Path(args.out), dpi=int(args.dpi))
+
+
+def _add_mean_fnc_matrices_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "mean-fnc-matrices",
+        help=(
+            "Plot mean Fisher-z Pearson FNC matrices (controls vs patients) from ICN time courses."
+        ),
+    )
+    p.add_argument("--synthetic", action="store_true", help="Use synthetic data")
+    p.add_argument("--tc", type=Path, default=DEFAULT_TC_PATH)
+    p.add_argument("--labels", type=Path, default=DEFAULT_LABEL_PATH)
+    p.add_argument("--icn-domain", type=Path, default=None)
+    p.add_argument(
+        "--npz",
+        type=str,
+        default="",
+        help="Single .npz with time_courses, y, icn_domain (overrides --tc/--labels)",
+    )
+    p.add_argument(
+        "-o",
+        "--out",
+        type=Path,
+        default=Path("figures/mean_fnc_pearson_z_hc_sz.png"),
+        help="Output PNG path.",
+    )
+    p.add_argument("--dpi", type=int, default=200)
+
+
+def _run_mean_fnc_matrices_cmd(args: argparse.Namespace) -> None:
+    from fbirn_experiment.figures import plot_group_mean_fnc_connectivity  # noqa: PLC0415
+    from fbirn_experiment.fnc import group_mean_pearson_fisher_z_matrices  # noqa: PLC0415
+
+    if args.synthetic:
+        tc, y, _icn_domain = synthetic_dataset()
+    elif args.npz:
+        tc, y, _icn_domain = load_npz(args.npz)
+    else:
+        tc, y, _icn_domain = load_fbirn_tc_and_labels(
+            args.tc,
+            args.labels,
+            args.icn_domain,
+        )
+
+    mean_hc, mean_sz, n_hc, n_sz = group_mean_pearson_fisher_z_matrices(tc, y)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    plot_group_mean_fnc_connectivity(
+        mean_hc,
+        mean_sz,
+        n_hc,
+        n_sz,
+        out,
+        icn_domain=_icn_domain,
+        dpi=int(args.dpi),
+    )
+    print(f"Wrote {out} (HC n={n_hc}, SZ n={n_sz}, ICNs={mean_hc.shape[0]})")
+
+
+def _add_plot_confounds_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "plot-confounds",
+        help="Plot distributions of confound columns (HC vs SZ) from the confounds CSV.",
+    )
+    p.add_argument(
+        "--confounds-csv",
+        type=Path,
+        default=DEFAULT_CONFOUND_CSV_PATH,
+        help=f"Subject-level table (default: {DEFAULT_CONFOUND_CSV_PATH}).",
+    )
+    p.add_argument("--tc", type=Path, default=DEFAULT_TC_PATH)
+    p.add_argument("--labels", type=Path, default=DEFAULT_LABEL_PATH)
+    p.add_argument("--icn-domain", type=Path, default=None)
+    p.add_argument(
+        "--npz",
+        type=str,
+        default="",
+        help="Single .npz with time_courses, y, icn_domain (overrides --tc/--labels).",
+    )
+    p.add_argument(
+        "--confound-cols",
+        type=str,
+        nargs="+",
+        default=list(DEFAULT_CONFOUND_COLS),
+        help="Columns to plot (must exist in CSV).",
+    )
+    p.add_argument(
+        "-o",
+        "--out",
+        type=Path,
+        default=Path("figures/confound_distributions.png"),
+        help="Output PNG path.",
+    )
+    p.add_argument("--dpi", type=int, default=200)
+
+
+def _run_plot_confounds_cmd(args: argparse.Namespace) -> None:
+    from fbirn_experiment.confound_figures import plot_confound_distributions  # noqa: PLC0415
+    from fbirn_experiment.confounds import load_confounds  # noqa: PLC0415
+
+    if args.npz:
+        _tc, y, _dom = load_npz(args.npz)
+    else:
+        _tc, y, _dom = load_fbirn_tc_and_labels(
+            args.tc,
+            args.labels,
+            args.icn_domain,
+        )
+
+    csv_path = Path(args.confounds_csv)
+    if not csv_path.is_file():
+        raise FileNotFoundError(f"Confound CSV not found: {csv_path}")
+
+    df = load_confounds(csv_path, tuple(args.confound_cols))
+    out = Path(args.out)
+    plot_confound_distributions(df, y, out, confound_cols=args.confound_cols, dpi=int(args.dpi))
+    print(f"Wrote {out} (n={len(y)}, columns={list(args.confound_cols)})")
+
+
 def _run_regen_h1_latent_figs_cmd(args: argparse.Namespace) -> None:
     from fbirn_experiment.figures import regenerate_h1_latent_interpretability_figures  # noqa: PLC0415
 
@@ -305,13 +498,21 @@ def _populate_run_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--h3-no-bic",
         action="store_true",
-        help="Use fixed H3 factor count (--h3-components) instead of BIC on full data.",
+        help=(
+            "Use fixed H3 latent count (--h3-components) instead of automatic k: "
+            "BIC/AIC grid for FA, reconstruction-MSE grid for ICA (default H3)."
+        ),
+    )
+    parser.add_argument(
+        "--h3-fa",
+        action="store_true",
+        help="Use factor analysis (BIC k) for H3 instead of default FastICA (reconstruction-MSE k).",
     )
     parser.add_argument(
         "--h3-components",
         type=int,
         default=10,
-        help="Fixed number of FA factors for H3 when --h3-no-bic is set.",
+        help="Fixed number of latent dimensions for H3 when --h3-no-bic is set.",
     )
     parser.add_argument(
         "--auc-bootstrap",
@@ -372,6 +573,7 @@ def _run_main_cmd(args: argparse.Namespace) -> None:
         fa_criterion=args.fa_criterion,
         h2_n_perm=args.h2_perm,
         h3_use_bic=not args.h3_no_bic,
+        h3_decomposition="fa" if getattr(args, "h3_fa", False) else "ica",
         h3_k_min=args.k_min,
         h3_k_max=args.k_max,
         h3_k_step=args.k_step,

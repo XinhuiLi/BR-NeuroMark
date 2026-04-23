@@ -1,24 +1,19 @@
 {
   "folds": [
     {
-      "clf__alpha": 0.1,
-      "clf__l1_ratio": 0.5
+      "clf__C": 17.78279410038923
     },
     {
-      "clf__alpha": 0.1,
-      "clf__l1_ratio": 0.5
+      "clf__C": 0.1
     },
     {
-      "clf__alpha": 0.1,
-      "clf__l1_ratio": 0.5
+      "clf__C": 17.78279410038923
     },
     {
-      "clf__alpha": 0.1,
-      "clf__l1_ratio": 0.5
+      "clf__C": 100.0
     },
     {
-      "clf__alpha": 0.1,
-      "clf__l1_ratio": 0.5
+      "clf__C": 17.78279410038923
     }
   ]
 }

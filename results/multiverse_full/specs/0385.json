@@ -1,0 +1,18 @@
+{
+  "spec_id": 385,
+  "connectivity": "mutual_info",
+  "confound": "none",
+  "reduction": "pca",
+  "classifier": "elasticnet",
+  "domain_granularity": "domain_7",
+  "h1_auc_edges": 0.7977977977977979,
+  "h1_auc_latent": 0.649074074074074,
+  "h1_delta_auc": -0.1487237237237239,
+  "h2_delta_d": -0.004633552582774342,
+  "h2_p": 0.3473053892215569,
+  "h3_wilcoxon_p": 0.4921875,
+  "h3_n_factors": 10,
+  "h3_between_gt_within": 6,
+  "duration_s": 180.49655103683472,
+  "error": ""
+}

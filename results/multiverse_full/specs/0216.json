@@ -1,0 +1,18 @@
+{
+  "spec_id": 216,
+  "connectivity": "spearman",
+  "confound": "combat",
+  "reduction": "ica",
+  "classifier": "elasticnet",
+  "domain_granularity": "subdomain_14",
+  "h1_auc_edges": null,
+  "h1_auc_latent": null,
+  "h1_delta_auc": null,
+  "h2_delta_d": null,
+  "h2_p": null,
+  "h3_wilcoxon_p": null,
+  "h3_n_factors": 0,
+  "h3_between_gt_within": 0,
+  "duration_s": 0.211500883102417,
+  "error": "No module named 'neuroCombat'"
+}

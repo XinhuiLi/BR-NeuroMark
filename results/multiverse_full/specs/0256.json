@@ -1,0 +1,18 @@
+{
+  "spec_id": 256,
+  "connectivity": "partial_corr",
+  "confound": "none",
+  "reduction": "ica",
+  "classifier": "elasticnet",
+  "domain_granularity": "subdomain_14",
+  "h1_auc_edges": 0.7771062729396062,
+  "h1_auc_latent": 0.8659743076409743,
+  "h1_delta_auc": 0.08886803470136806,
+  "h2_delta_d": -0.0695113165856909,
+  "h2_p": 0.001996007984031936,
+  "h3_wilcoxon_p": 0.028256978552906986,
+  "h3_n_factors": 50,
+  "h3_between_gt_within": 33,
+  "duration_s": 146.07010197639465,
+  "error": ""
+}

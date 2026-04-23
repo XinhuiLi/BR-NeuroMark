@@ -1,0 +1,26 @@
+{
+  "per_model": [
+    {
+      "model": "edges_logistic",
+      "auc_mean": 0.8227102102102102,
+      "auc_std": 0.06727231136578157,
+      "auc_cv": 0.08176914608680116,
+      "auc_iqr": 0.11036036036036034,
+      "auc_range": 0.1543209876543209
+    },
+    {
+      "model": "ica_logistic",
+      "auc_mean": 0.8377794461127795,
+      "auc_std": 0.06573408848462604,
+      "auc_cv": 0.0784622835874361,
+      "auc_iqr": 0.0633758758758759,
+      "auc_range": 0.15918001334668008
+    }
+  ],
+  "levene_statistic": 0.03626642109590111,
+  "levene_pvalue": 0.8537101365638626,
+  "fligner_statistic": 0.36933773880963483,
+  "fligner_pvalue": 0.5433654786771815,
+  "n_outer_folds": 5,
+  "note": "Levene/Fligner: H0 equal spread of outer-fold AUCs across models. Low p suggests different fold-to-fold stability (variance of AUC)."
+}

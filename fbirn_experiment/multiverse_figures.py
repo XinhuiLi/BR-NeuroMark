@@ -21,6 +21,61 @@ FORK_LABELS = {
     "domain_granularity": "D5: Domain",
 }
 
+# Human-readable option labels (raw multiverse codes → plot / table text).
+_FORK_LEVEL_DISPLAY: dict[str, dict[str, str]] = {
+    "connectivity": {
+        "pearson_z": "Pearson (Fisher z)",
+        "spearman": "Spearman",
+        "partial_corr": "Partial correlation",
+        "mutual_info": "Mutual information",
+    },
+    "confound": {
+        "none": "None",
+        "ols": "OLS confound removal",
+        "combat": "ComBat harmonization",
+    },
+    "reduction": {
+        "none": "No reduction (edges only)",
+        "fa": "Factor analysis",
+        "ica": "ICA",
+        "pca": "PCA",
+        "nmf": "NMF",
+    },
+    "classifier": {
+        "elasticnet": "Elastic net",
+        "logistic_l2": "Logistic regression (L2)",
+        "svm_linear": "Linear SVM",
+        "rf": "Random forest",
+    },
+    "domain_granularity": {
+        "subdomain_14": "14 subdomains",
+        "domain_7": "7 domains",
+    },
+}
+
+_OUTCOME_COL_DISPLAY: dict[str, str] = {
+    "h1_delta_auc": "ΔAUC (latent − edges)",
+    "h2_delta_d": "Δ mean |Cohen's d|",
+    "h3_wilcoxon_p": "Wilcoxon p-value",
+}
+
+
+def format_fork_level(fork_col: str, raw: object) -> str:
+    """Map stored fork level codes to short, reader-friendly labels."""
+    s = str(raw).strip()
+    per_fork = _FORK_LEVEL_DISPLAY.get(fork_col)
+    if per_fork is not None and s in per_fork:
+        return per_fork[s]
+    if not s:
+        return s
+    # Fallback: snake_case → Title Case (handles ad-hoc / future levels).
+    return " ".join(part.capitalize() for part in s.split("_"))
+
+
+def format_outcome_axis_label(outcome_col: str) -> str:
+    """Axis label for forest plots (column is still the raw key in data)."""
+    return _OUTCOME_COL_DISPLAY.get(outcome_col, outcome_col.replace("_", " "))
+
 _FONT_TITLE = 15
 _FONT_LABEL = 13
 _FONT_TICK = 11
@@ -85,7 +140,9 @@ def _tile_ax(
                     row_idx, width=1.0, left=x - 0.5, height=0.8,
                     color=fork_color, linewidth=0, rasterized=True,
                 )
-            y_labels.append(f"{FORK_LABELS.get(col, col)}: {lev}")
+            y_labels.append(
+                f"{FORK_LABELS.get(col, col)}: {format_fork_level(col, lev)}",
+            )
             row_idx += 1
 
     n_rows = len(y_labels)
@@ -248,6 +305,7 @@ def plot_forest(
                 continue
             fork_color = _tab20c_domain_level_color(fork_idx, level_idx)
             entries.append({
+                "fork_col": fork,
                 "fork": FORK_LABELS.get(fork, fork),
                 "level": str(lev),
                 "vals": vals.copy(),
@@ -303,10 +361,13 @@ def plot_forest(
         y_sep = n_rows - b - 0.5
         ax.axhline(y_sep, color="#cccccc", lw=0.8, ls="-")
 
-    y_labels = [f"{e['fork']}: {e['level']}" for e in entries]
+    y_labels = [
+        f"{e['fork']}: {format_fork_level(e['fork_col'], e['level'])}"
+        for e in entries
+    ]
     ax.set_yticks(range(n_rows))
     ax.set_yticklabels(list(reversed(y_labels)), fontsize=_FONT_TICK)
-    ax.set_xlabel(outcome_col, fontsize=_FONT_LABEL)
+    ax.set_xlabel(format_outcome_axis_label(outcome_col), fontsize=_FONT_LABEL)
     ax.set_title(title, fontsize=_FONT_TITLE)
     ax.tick_params(axis="x", labelsize=_FONT_TICK)
     ax.set_ylim(-0.7, n_rows - 0.3)
@@ -400,7 +461,7 @@ def conditional_robustness(
             rows.append({
                 "Hypothesis": hypothesis,
                 "Fork": FORK_LABELS.get(fork, fork),
-                "Level": str(lev),
+                "Level": format_fork_level(fork, lev),
                 "Total": len(sub),
                 "# Significant": n_sig,
                 "% Significant": f"{100 * n_sig / len(sub):.1f}",
@@ -536,3 +597,34 @@ def generate_multiverse_figures(
         joint.to_csv(fig_dir / "mv_joint_permutation_test.csv", index=False)
         print(f"Saved {fig_dir / 'mv_joint_permutation_test.csv'}")
         print("\nJoint permutation test:\n", joint.to_string(index=False))
+
+
+def regenerate_multiverse_figures(
+    results_csv: Path | str,
+    *,
+    figures_dir: Path | str | None = None,
+    dpi: int = 200,
+) -> None:
+    """Rebuild all multiverse figures and summary CSVs from a saved results table.
+
+    Reads ``multiverse_results.csv`` (same format as ``run_multiverse`` writes under
+    ``output_dir``). Drops rows with a non-empty ``error`` column so plots match a
+    successful run only.
+    """
+    results_csv = Path(results_csv)
+    if not results_csv.is_file():
+        raise FileNotFoundError(
+            f"Multiverse results not found: {results_csv}. "
+            "Pass the path to multiverse_results.csv from a completed multiverse run.",
+        )
+    df = pd.read_csv(results_csv)
+    if "error" in df.columns:
+        err = df["error"]
+        ok = err.isna() | (err.astype(str).str.strip().isin(("", "nan")))
+        n_drop = int((~ok).sum())
+        if n_drop:
+            print(f"Dropping {n_drop} row(s) with recorded errors before plotting.")
+        df = df.loc[ok].copy()
+    fig_dir = Path(figures_dir) if figures_dir is not None else results_csv.parent / "figures"
+    generate_multiverse_figures(df, fig_dir, dpi=dpi)
+    print(f"Multiverse figures → {fig_dir}")

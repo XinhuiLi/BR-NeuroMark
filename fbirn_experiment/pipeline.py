@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 
 import numpy as np
 
@@ -53,6 +53,7 @@ def run_experiment(
     fa_criterion: str = "bic",
     h2_n_perm: int = 2000,
     h3_use_bic: bool = True,
+    h3_decomposition: Literal["fa", "ica"] = "ica",
     h3_k_min: int = 5,
     h3_k_max: int = 50,
     h3_k_step: int = 5,
@@ -116,6 +117,8 @@ def run_experiment(
             "fa_criterion": fa_criterion,
             "h1_include_fa": bool(h1_include_fa),
             "h1_edges_classifier": "logistic_l2",
+            "h3_decomposition": h3_decomposition,
+            "h3_auto_k": bool(h3_use_bic),
             **confound_meta,
         }
         save_json(out / "run_meta.json", run_meta)
@@ -178,6 +181,7 @@ def run_experiment(
         icn_domain,
         ii,
         jj,
+        decomposition=h3_decomposition,
         use_bic_selection=h3_use_bic,
         k_min=h3_k_min,
         k_max=h3_k_max,
@@ -211,6 +215,7 @@ def run_experiment(
             h3_domain_pair_summary=h3.domain_pair_summary,
             h1_stability=h1_stability,
             h1_interpretability=h1_interp,
+            h3_decomposition=str(h3.selection.get("decomposition", h3_decomposition)),
         )
 
     return {

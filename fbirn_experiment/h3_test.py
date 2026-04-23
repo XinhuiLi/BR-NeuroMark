@@ -1,16 +1,19 @@
-"""H3: exploratory factor loadings — between-/within-domain and hypothesis domain pairs."""
+"""H3: exploratory latent loadings (ICA by default, optional FA)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 
 import numpy as np
 import pandas as pd
-from sklearn.decomposition import FactorAnalysis
+from sklearn.decomposition import FactorAnalysis, FastICA
 from sklearn.preprocessing import StandardScaler
 
-from fbirn_experiment.component_selection import select_n_components_fa
+from fbirn_experiment.component_selection import (
+    select_n_components_fa,
+    select_n_components_ica,
+)
 from fbirn_experiment.fnc import edge_domain_mask, edge_pair_mask_for_domains
 
 # Literature-derived schizophrenia hypothesis domain pairs.
@@ -144,6 +147,7 @@ def h3_factor_loadings_between_within(
     ii: np.ndarray,
     jj: np.ndarray,
     *,
+    decomposition: Literal["fa", "ica"] = "ica",
     use_bic_selection: bool = True,
     k_min: int = 5,
     k_max: int = 50,
@@ -153,33 +157,64 @@ def h3_factor_loadings_between_within(
     random_state: int = 0,
     bic_max_iter: int = 1000,
     fa_fit_max_iter: int = 2000,
+    ica_fit_max_iter: int = 1000,
     hypothesis_pairs: Sequence[tuple[str, str, str]] | None = None,
 ) -> H3Result:
+    """Between-/within-domain |loadings| on FNC edges after FA or FastICA.
+
+    *decomposition*: ``"ica"`` (default) uses reconstruction-MSE grid selection
+    when *use_bic_selection* is True; ``"fa"`` uses BIC/AIC grid selection.
+    """
     scaler = StandardScaler()
     Xs = scaler.fit_transform(edges)
     n, p = Xs.shape
-    selection: dict[str, Any] = {}
+    selection: dict[str, Any] = {"decomposition": decomposition}
 
-    if use_bic_selection:
-        k, diag = select_n_components_fa(
-            Xs,
-            k_min=k_min,
-            k_max=k_max,
-            k_step=k_step,
-            criterion=fa_criterion,
-            random_state=random_state,
-            max_iter=bic_max_iter,
+    if decomposition == "fa":
+        if use_bic_selection:
+            k, diag = select_n_components_fa(
+                Xs,
+                k_min=k_min,
+                k_max=k_max,
+                k_step=k_step,
+                criterion=fa_criterion,
+                random_state=random_state,
+                max_iter=bic_max_iter,
+            )
+            selection = {**selection, "mode": "bic", **diag, "k_selected": int(k)}
+        else:
+            k = int(min(max(1, n_components_fixed), p - 1, n - 1))
+            selection = {**selection, "mode": "fixed", "k_selected": k}
+
+        fa = FactorAnalysis(
+            n_components=k, max_iter=fa_fit_max_iter, random_state=random_state
         )
-        selection = {"mode": "bic", **diag, "k_selected": int(k)}
+        fa.fit(Xs)
+        loadings = fa.components_
     else:
-        k = int(min(max(1, n_components_fixed), p - 1, n - 1))
-        selection = {"mode": "fixed", "k_selected": k}
+        if use_bic_selection:
+            k, diag = select_n_components_ica(
+                Xs,
+                k_min=k_min,
+                k_max=k_max,
+                k_step=k_step,
+                random_state=random_state,
+                max_iter=bic_max_iter,
+            )
+            selection = {**selection, "mode": "reconstruction_mse", **diag, "k_selected": int(k)}
+        else:
+            k = int(min(max(1, n_components_fixed), p, max(1, n - 1)))
+            selection = {**selection, "mode": "fixed", "k_selected": k}
 
-    fa = FactorAnalysis(
-        n_components=k, max_iter=fa_fit_max_iter, random_state=random_state
-    )
-    fa.fit(Xs)
-    loadings = fa.components_
+        ica = FastICA(
+            n_components=k,
+            random_state=random_state,
+            max_iter=ica_fit_max_iter,
+            whiten="unit-variance",
+            tol=1e-4,
+        )
+        ica.fit(Xs)
+        loadings = ica.components_
 
     within, between = edge_domain_mask(icn_domain, ii, jj)
 

@@ -1,9 +1,8 @@
 {
-  "mode": "bic",
-  "criterion": "bic",
-  "best_value": 4936386.111668538,
-  "k_min_requested": 5.0,
-  "k_max_requested": 50.0,
+  "decomposition": "ica",
+  "mode": "reconstruction_mse",
+  "criterion": "ica_reconstruction_mse",
+  "best_value": 0.32959858545106185,
   "k_step": 5,
   "k_candidates": [
     5,
@@ -17,8 +16,7 @@
     45,
     50
   ],
-  "k_range_used": "5-50",
-  "k_selected": 25,
+  "k_selected": 50,
   "hypothesis_pairs_resolved": [
     {
       "short": [

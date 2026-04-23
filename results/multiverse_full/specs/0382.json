@@ -1,0 +1,18 @@
+{
+  "spec_id": 382,
+  "connectivity": "mutual_info",
+  "confound": "none",
+  "reduction": "ica",
+  "classifier": "rf",
+  "domain_granularity": "subdomain_14",
+  "h1_auc_edges": 0.8202494160827494,
+  "h1_auc_latent": 0.779637971304638,
+  "h1_delta_auc": -0.040611444778111405,
+  "h2_delta_d": -0.029143036485674956,
+  "h2_p": 0.001996007984031936,
+  "h3_wilcoxon_p": 0.0013303578723942167,
+  "h3_n_factors": 50,
+  "h3_between_gt_within": 13,
+  "duration_s": 662.0651390552521,
+  "error": ""
+}

@@ -1,0 +1,18 @@
+{
+  "spec_id": 226,
+  "connectivity": "spearman",
+  "confound": "combat",
+  "reduction": "pca",
+  "classifier": "logistic_l2",
+  "domain_granularity": "subdomain_14",
+  "h1_auc_edges": null,
+  "h1_auc_latent": null,
+  "h1_delta_auc": null,
+  "h2_delta_d": null,
+  "h2_p": null,
+  "h3_wilcoxon_p": null,
+  "h3_n_factors": 0,
+  "h3_between_gt_within": 0,
+  "duration_s": 0.20893073081970215,
+  "error": "No module named 'neuroCombat'"
+}

@@ -1,0 +1,50 @@
+Hypothesis,Fork,Level,Total,# Significant,% Significant
+H2,D1: Connectivity,Mutual information,80,60,75.0
+H2,D1: Connectivity,Partial correlation,80,80,100.0
+H2,D1: Connectivity,Pearson (Fisher z),56,56,100.0
+H2,D1: Connectivity,Spearman,104,104,100.0
+H2,D2: Confound,None,144,124,86.1
+H2,D2: Confound,OLS confound removal,176,176,100.0
+H2,D3: Reduction,Factor analysis,72,68,94.4
+H2,D3: Reduction,ICA,72,68,94.4
+H2,D3: Reduction,NMF,56,52,92.9
+H2,D3: Reduction,No reduction (edges only),64,60,93.8
+H2,D3: Reduction,PCA,56,52,92.9
+H2,D4: Classifier,Elastic net,68,63,92.6
+H2,D4: Classifier,Logistic regression (L2),92,87,94.6
+H2,D4: Classifier,Random forest,68,63,92.6
+H2,D4: Classifier,Linear SVM,92,87,94.6
+H2,D5: Domain,7 domains,160,140,87.5
+H2,D5: Domain,14 subdomains,160,160,100.0
+H3,D1: Connectivity,Mutual information,64,32,50.0
+H3,D1: Connectivity,Partial correlation,64,24,37.5
+H3,D1: Connectivity,Pearson (Fisher z),48,32,66.7
+H3,D1: Connectivity,Spearman,80,54,67.5
+H3,D2: Confound,None,112,66,58.9
+H3,D2: Confound,OLS confound removal,144,76,52.8
+H3,D3: Reduction,Factor analysis,72,38,52.8
+H3,D3: Reduction,ICA,72,56,77.8
+H3,D3: Reduction,NMF,56,28,50.0
+H3,D3: Reduction,PCA,56,20,35.7
+H3,D4: Classifier,Elastic net,56,29,51.8
+H3,D4: Classifier,Logistic regression (L2),72,42,58.3
+H3,D4: Classifier,Random forest,56,29,51.8
+H3,D4: Classifier,Linear SVM,72,42,58.3
+H3,D5: Domain,7 domains,128,78,60.9
+H3,D5: Domain,14 subdomains,128,64,50.0
+H1,D1: Connectivity,Mutual information,64,4,6.2
+H1,D1: Connectivity,Partial correlation,64,18,28.1
+H1,D1: Connectivity,Pearson (Fisher z),48,10,20.8
+H1,D1: Connectivity,Spearman,80,14,17.5
+H1,D2: Confound,None,112,12,10.7
+H1,D2: Confound,OLS confound removal,144,34,23.6
+H1,D3: Reduction,Factor analysis,72,2,2.8
+H1,D3: Reduction,ICA,72,34,47.2
+H1,D3: Reduction,NMF,56,8,14.3
+H1,D3: Reduction,PCA,56,2,3.6
+H1,D4: Classifier,Elastic net,56,16,28.6
+H1,D4: Classifier,Logistic regression (L2),72,12,16.7
+H1,D4: Classifier,Random forest,56,8,14.3
+H1,D4: Classifier,Linear SVM,72,10,13.9
+H1,D5: Domain,7 domains,128,23,18.0
+H1,D5: Domain,14 subdomains,128,23,18.0

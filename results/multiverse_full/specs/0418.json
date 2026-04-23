@@ -1,0 +1,18 @@
+{
+  "spec_id": 418,
+  "connectivity": "mutual_info",
+  "confound": "ols",
+  "reduction": "ica",
+  "classifier": "logistic_l2",
+  "domain_granularity": "subdomain_14",
+  "h1_auc_edges": 0.8131965298631965,
+  "h1_auc_latent": 0.7987487487487488,
+  "h1_delta_auc": -0.014447781114447666,
+  "h2_delta_d": -0.04087987733007123,
+  "h2_p": 0.001996007984031936,
+  "h3_wilcoxon_p": 0.010566648384996213,
+  "h3_n_factors": 50,
+  "h3_between_gt_within": 20,
+  "duration_s": 58.3921959400177,
+  "error": ""
+}

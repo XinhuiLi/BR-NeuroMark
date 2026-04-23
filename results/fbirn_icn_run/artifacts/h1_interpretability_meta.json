@@ -1,0 +1,9 @@
+{
+  "hyperparams_edges": {
+    "clf__C": 17.78279410038923
+  },
+  "hyperparams_ica": {
+    "n_components": 50,
+    "clf__C": 0.1
+  }
+}

@@ -9,6 +9,10 @@
   "k_max": 50,
   "k_step": 5,
   "fa_criterion": "bic",
+  "h1_include_fa": false,
+  "h1_edges_classifier": "logistic_l2",
+  "h3_decomposition": "ica",
+  "h3_auto_k": true,
   "confounds_applied": true,
   "confound_columns_raw": [
     "age",

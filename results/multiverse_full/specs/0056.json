@@ -1,0 +1,18 @@
+{
+  "spec_id": 56,
+  "connectivity": "pearson_z",
+  "confound": "ols",
+  "reduction": "ica",
+  "classifier": "elasticnet",
+  "domain_granularity": "subdomain_14",
+  "h1_auc_edges": 0.8439189189189189,
+  "h1_auc_latent": 0.8359150817484151,
+  "h1_delta_auc": -0.008003837170503791,
+  "h2_delta_d": 0.020527351967751295,
+  "h2_p": 0.03792415169660679,
+  "h3_wilcoxon_p": 0.08760075247442067,
+  "h3_n_factors": 50,
+  "h3_between_gt_within": 20,
+  "duration_s": 138.20944118499756,
+  "error": ""
+}

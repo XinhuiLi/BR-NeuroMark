@@ -1,0 +1,18 @@
+{
+  "spec_id": 293,
+  "connectivity": "partial_corr",
+  "confound": "ols",
+  "reduction": "fa",
+  "classifier": "svm_linear",
+  "domain_granularity": "domain_7",
+  "h1_auc_edges": 0.8176551551551551,
+  "h1_auc_latent": 0.7748665331998665,
+  "h1_delta_auc": -0.04278862195528854,
+  "h2_delta_d": -0.022843270417325617,
+  "h2_p": 0.001996007984031936,
+  "h3_wilcoxon_p": 0.0625,
+  "h3_n_factors": 5,
+  "h3_between_gt_within": 0,
+  "duration_s": 163.87779140472412,
+  "error": ""
+}

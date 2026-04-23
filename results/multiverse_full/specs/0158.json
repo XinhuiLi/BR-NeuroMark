@@ -1,0 +1,18 @@
+{
+  "spec_id": 158,
+  "connectivity": "spearman",
+  "confound": "none",
+  "reduction": "nmf",
+  "classifier": "rf",
+  "domain_granularity": "subdomain_14",
+  "h1_auc_edges": 0.832082082082082,
+  "h1_auc_latent": 0.8378253253253254,
+  "h1_delta_auc": 0.005743243243243379,
+  "h2_delta_d": 0.050388924162967225,
+  "h2_p": 0.001996007984031936,
+  "h3_wilcoxon_p": 0.07719592312590784,
+  "h3_n_factors": 50,
+  "h3_between_gt_within": 30,
+  "duration_s": 1554.5427119731903,
+  "error": ""
+}

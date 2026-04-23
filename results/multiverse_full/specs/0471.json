@@ -1,0 +1,18 @@
+{
+  "spec_id": 471,
+  "connectivity": "mutual_info",
+  "confound": "combat",
+  "reduction": "pca",
+  "classifier": "rf",
+  "domain_granularity": "domain_7",
+  "h1_auc_edges": null,
+  "h1_auc_latent": null,
+  "h1_delta_auc": null,
+  "h2_delta_d": null,
+  "h2_p": null,
+  "h3_wilcoxon_p": null,
+  "h3_n_factors": 0,
+  "h3_between_gt_within": 0,
+  "duration_s": 0.23292922973632812,
+  "error": "No module named 'neuroCombat'"
+}

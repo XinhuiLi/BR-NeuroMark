@@ -40,6 +40,64 @@ def symmetric_matrix_from_upper_vec(
     return m
 
 
+def pearson_fisher_z_connectivity_matrix(tc: np.ndarray) -> np.ndarray:
+    """Full ICN × ICN Pearson correlation transformed to Fisher *z*.
+
+    Parameters
+    ----------
+    tc : (n_timepoints, n_icns)
+
+    Returns
+    -------
+    (n_icns, n_icns) symmetric matrix (including diagonal; often masked when plotting).
+    """
+    r = pairwise_correlation_matrix(tc)
+    return fisher_z(r)
+
+
+def group_mean_pearson_fisher_z_matrices(
+    time_courses: np.ndarray,
+    y: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, int, int]:
+    """Mean Fisher-*z* connectivity in z-space per group (HC vs SZ).
+
+    For each subject, the Pearson correlation matrix is converted with
+    :func:`fisher_z`, then averaged over subjects with the same label.
+
+    Parameters
+    ----------
+    time_courses : (n_subj, n_time, n_icns)
+    y : (n_subj,) binary labels ``0`` = healthy control (HC), ``1`` = patient (SZ)
+
+    Returns
+    -------
+    mean_hc, mean_sz : (n_icns, n_icns)
+        Group-mean Fisher-*z* matrices.
+    n_hc, n_sz : int
+        Subject counts per group.
+    """
+    y = np.asarray(y).astype(int).ravel()
+    if time_courses.shape[0] != y.shape[0]:
+        raise ValueError("time_courses and y must have the same n_subj dimension.")
+    mask_hc = y == 0
+    mask_sz = y == 1
+    n_hc = int(mask_hc.sum())
+    n_sz = int(mask_sz.sum())
+    if n_hc < 1 or n_sz < 1:
+        raise ValueError(f"Need at least one HC and one SZ subject; got HC={n_hc}, SZ={n_sz}.")
+
+    n_icns = int(time_courses.shape[2])
+    sum_hc = np.zeros((n_icns, n_icns), dtype=np.float64)
+    sum_sz = np.zeros((n_icns, n_icns), dtype=np.float64)
+    for s in range(time_courses.shape[0]):
+        z = pearson_fisher_z_connectivity_matrix(time_courses[s])
+        if mask_hc[s]:
+            sum_hc += z
+        else:
+            sum_sz += z
+    return sum_hc / n_hc, sum_sz / n_sz, n_hc, n_sz
+
+
 def fnc_edges_from_tc(
     time_courses: np.ndarray,
 ) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]:

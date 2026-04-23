@@ -1,0 +1,18 @@
+{
+  "spec_id": 13,
+  "connectivity": "pearson_z",
+  "confound": "ols",
+  "reduction": "none",
+  "classifier": "logistic_l2",
+  "domain_granularity": "subdomain_14",
+  "h1_auc_edges": 0.8227102102102102,
+  "h1_auc_latent": null,
+  "h1_delta_auc": null,
+  "h2_delta_d": 0.02052735196775135,
+  "h2_p": 0.03792415169660679,
+  "h3_wilcoxon_p": null,
+  "h3_n_factors": 0,
+  "h3_between_gt_within": 0,
+  "duration_s": 21.97152280807495,
+  "error": ""
+}

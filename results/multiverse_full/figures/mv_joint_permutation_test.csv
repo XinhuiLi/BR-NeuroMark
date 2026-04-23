@@ -1,0 +1,4 @@
+Hypothesis,n_specs,n_favourable,pct_favourable,null_alpha,null_expected,binom_p,exceeds_chance
+H1: Latent > Edges,256,46,18.0,0.05,12.8,5.731093746992717e-14,True
+H2: Between > Within,320,300,93.8,0.05,16.0,0.0,True
+H3: Between loading advantage,256,142,55.5,0.05,12.8,6.763472504595377e-113,True
