@@ -181,12 +181,41 @@ def nested_cv_classifiers(
     Outer CV: on each training fold, select ICA k by reconstruction MSE on scaled
     training features; optionally the same for FA (*include_fa*). Inner CV tunes
     ``clf__C`` for edges (L2 logistic), latent logistic, and (if enabled) FA.
+    The latent dimensionality search is performed on the outer-training fold,
+    not separately inside each inner-CV split.
 
     If *confound_matrix* is provided (n_subjects × n_regressors, with intercept),
     confound regression is fit on each outer training fold and applied to both
     train and test splits to avoid information leakage.
     """
+    X = np.asarray(X, dtype=np.float64)
     y = np.asarray(y).astype(int)
+    if X.ndim != 2:
+        raise ValueError(f"X must be 2D (subjects × edges/features); got shape {X.shape}.")
+    if X.shape[0] != y.shape[0]:
+        raise ValueError(f"X rows ({X.shape[0]}) must match y length ({y.shape[0]}).")
+    if not np.all(np.isfinite(X)):
+        raise ValueError("X contains non-finite values.")
+    classes, counts = np.unique(y, return_counts=True)
+    if not np.array_equal(classes, np.array([0, 1])):
+        raise ValueError(f"y must be binary with labels {{0, 1}}; got {classes.tolist()}.")
+    if confound_matrix is not None:
+        confound_matrix = np.asarray(confound_matrix, dtype=np.float64)
+        if confound_matrix.ndim != 2 or confound_matrix.shape[0] != X.shape[0]:
+            raise ValueError(
+                "confound_matrix must be 2D with one row per subject; "
+                f"got {confound_matrix.shape} for X shape {X.shape}."
+            )
+        if not np.all(np.isfinite(confound_matrix)):
+            raise ValueError("confound_matrix contains non-finite values.")
+    min_class = int(counts.min())
+    if outer_splits < 2 or inner_splits < 2:
+        raise ValueError("outer_splits and inner_splits must both be at least 2.")
+    if outer_splits > min_class or inner_splits > min_class:
+        raise ValueError(
+            "outer_splits and inner_splits must not exceed the smallest class size "
+            f"({min_class})."
+        )
     n = len(y)
     outer_cv = StratifiedKFold(
         n_splits=outer_splits, shuffle=True, random_state=random_state
@@ -236,6 +265,7 @@ def nested_cv_classifiers(
                 random_state=random_state + fold_idx,
                 max_iter=fa_bic_max_iter,
             )
+            diag_fa = {**diag_fa, "k_selection_scope": "outer_training_fold"}
         k_ica, diag_ica = select_n_components_ica(
             X_tr_s,
             k_min=k_min,
@@ -244,6 +274,7 @@ def nested_cv_classifiers(
             random_state=random_state + fold_idx,
             max_iter=ica_select_max_iter,
         )
+        diag_ica = {**diag_ica, "k_selection_scope": "outer_training_fold"}
 
         pipe_e = make_edge_pipeline()
         grid_e = {"clf__C": Cs}
@@ -334,9 +365,24 @@ def bootstrap_oof_auc_difference(
     n_boot: int = 10000,
     random_state: int = 0,
 ) -> tuple[float, float, tuple[float, float]]:
-    """Bootstrap subjects on OOF predictions; delta = AUC(a) - AUC(b)."""
+    """Stratified bootstrap subjects on OOF predictions; delta = AUC(a) - AUC(b)."""
     rng = np.random.default_rng(random_state)
     y_true = np.asarray(y_true).astype(int)
+    p_a = np.asarray(p_a, dtype=np.float64)
+    p_b = np.asarray(p_b, dtype=np.float64)
+    if y_true.shape[0] != p_a.shape[0] or y_true.shape[0] != p_b.shape[0]:
+        raise ValueError("y_true, p_a, and p_b must have the same length.")
+    if n_boot < 1:
+        raise ValueError("n_boot must be at least 1.")
+    classes = np.unique(y_true)
+    if not np.array_equal(classes, np.array([0, 1])):
+        raise ValueError(f"y_true must contain binary labels {{0, 1}}; got {classes.tolist()}.")
+    idx0 = np.where(y_true == 0)[0]
+    idx1 = np.where(y_true == 1)[0]
+    if len(idx0) < 1 or len(idx1) < 1:
+        raise ValueError("AUC bootstrap requires at least one sample from each class.")
+    if not np.all(np.isfinite(p_a)) or not np.all(np.isfinite(p_b)):
+        raise ValueError("Predicted scores contain non-finite values.")
     n = len(y_true)
 
     def delta(idx: np.ndarray) -> float:
@@ -347,7 +393,12 @@ def bootstrap_oof_auc_difference(
     obs = delta(np.arange(n))
     boots = np.empty(n_boot)
     for b in range(n_boot):
-        idx = rng.integers(0, n, size=n)
+        idx = np.concatenate(
+            [
+                rng.choice(idx0, size=len(idx0), replace=True),
+                rng.choice(idx1, size=len(idx1), replace=True),
+            ]
+        )
         boots[b] = delta(idx)
     p_two = 2 * min(float(np.mean(boots >= obs)), float(np.mean(boots <= obs)))
     p_two = min(p_two, 1.0)
@@ -368,6 +419,17 @@ def permutation_y_auc_difference(
     """
     rng = np.random.default_rng(random_state)
     y_true = np.asarray(y_true).astype(int)
+    p_a = np.asarray(p_a, dtype=np.float64)
+    p_b = np.asarray(p_b, dtype=np.float64)
+    if y_true.shape[0] != p_a.shape[0] or y_true.shape[0] != p_b.shape[0]:
+        raise ValueError("y_true, p_a, and p_b must have the same length.")
+    if n_perm < 1:
+        raise ValueError("n_perm must be at least 1.")
+    classes = np.unique(y_true)
+    if not np.array_equal(classes, np.array([0, 1])):
+        raise ValueError(f"y_true must contain binary labels {{0, 1}}; got {classes.tolist()}.")
+    if not np.all(np.isfinite(p_a)) or not np.all(np.isfinite(p_b)):
+        raise ValueError("Predicted scores contain non-finite values.")
     obs = roc_auc_score(y_true, p_a) - roc_auc_score(y_true, p_b)
     null = np.empty(n_perm)
     for i in range(n_perm):
@@ -430,6 +492,10 @@ def pairwise_auc_tests(
         "wilcoxon_fold_p_two_sided": w_p,
         "n_bootstrap": n_bootstrap,
         "n_perm_y": n_perm_y,
+        "model_comparison_note": (
+            "OOF bootstrap is stratified by class; fold-wise Wilcoxon uses the "
+            "small outer-fold sample and should be interpreted descriptively."
+        ),
     }
 
 
@@ -478,7 +544,8 @@ def compute_h1_stability_tests(
         "n_outer_folds": int(len(ae)),
         "note": (
             "Levene/Fligner: H0 equal spread of outer-fold AUCs across models. "
-            "Low p suggests different fold-to-fold stability (variance of AUC)."
+            "Low p suggests different fold-to-fold stability (variance of AUC). "
+            "With few outer folds, treat these as descriptive sensitivity checks."
         ),
     }
 

@@ -8,11 +8,14 @@ from typing import Any, Sequence
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+mpl.rcParams["font.family"] = "sans-serif"
+mpl.rcParams["font.sans-serif"] = ["Arial", "Helvetica", "DejaVu Sans"]
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
 
-from fbirn_experiment.fnc import symmetric_matrix_from_upper_vec
+from fbirn_experiment.connectivity import ConnectivityMethod, symmetric_matrix_from_upper_vec
 from fbirn_experiment.h1_cv import NestedCVResult
 
 
@@ -54,7 +57,7 @@ def plot_h1_fold_aucs(
     res_ica: NestedCVResult,
     out_path: Path,
     *,
-    dpi: int = 150,
+    dpi: int = 400,
 ) -> None:
     folds = np.arange(1, len(res_edges.outer_aucs) + 1)
     w = 0.22
@@ -83,7 +86,7 @@ def plot_h1_oof_roc(
     res_ica: NestedCVResult,
     out_path: Path,
     *,
-    dpi: int = 150,
+    dpi: int = 400,
 ) -> None:
     from sklearn.metrics import roc_auc_score, roc_curve
 
@@ -119,7 +122,7 @@ def plot_h1_stability_violin(
     stability: dict,
     out_path: Path,
     *,
-    dpi: int = 150,
+    dpi: int = 400,
 ) -> None:
     """Violin plot of outer-fold AUCs; annotate Levene test for equal spread."""
     fig, ax = plt.subplots(figsize=(7, 4.5))
@@ -171,7 +174,7 @@ def plot_h1_edge_top_coefficients(
     out_path: Path,
     *,
     top_k: int = 45,
-    dpi: int = 150,
+    dpi: int = 400,
     icn_labels: np.ndarray | Sequence[str] | None = None,
 ) -> None:
     """Top |logistic coefficients| on edge features (FNC upper triangle)."""
@@ -366,7 +369,7 @@ def regenerate_h1_latent_interpretability_figures(
     artifacts_dir: Path | str,
     figures_dir: Path | str | None = None,
     *,
-    dpi: int = 150,
+    dpi: int = 400,
     **plot_kw: Any,
 ) -> None:
     """Redraw latent interpretability PNGs from artifacts (ICA always; FA if saved).
@@ -436,7 +439,7 @@ def plot_h2_permutation_null(
     observed: float,
     out_path: Path,
     *,
-    dpi: int = 150,
+    dpi: int = 400,
 ) -> None:
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.hist(null, bins=40, density=True, color="#7f7f7f", alpha=0.85, edgecolor="white")
@@ -456,7 +459,7 @@ def plot_h2_abs_d_violin(
     mask_within: np.ndarray,
     out_path: Path,
     *,
-    dpi: int = 150,
+    dpi: int = 400,
 ) -> None:
     fig, ax = plt.subplots(figsize=(5, 4))
     ax.violinplot(
@@ -517,7 +520,7 @@ def plot_h3_summary_bars(
     out_path: Path,
     *,
     decomposition: str = "ica",
-    dpi: int = 150,
+    dpi: int = 400,
 ) -> None:
     """
     Grouped bar chart: between-domain vs within-domain mean |loading| per factor.
@@ -572,7 +575,7 @@ def plot_h3_domain_pair_heatmap(
     out_path: Path,
     *,
     decomposition: str = "ica",
-    dpi: int = 150,
+    dpi: int = 400,
 ) -> None:
     """
     Heatmap: factors (rows) x hypothesis domain pairs (columns), cell value =
@@ -609,7 +612,7 @@ def plot_h3_domain_pair_bars(
     out_path: Path,
     *,
     decomposition: str = "ica",
-    dpi: int = 150,
+    dpi: int = 400,
 ) -> None:
     """
     Bar chart: average mean |loading| across all factors for each hypothesis
@@ -679,7 +682,7 @@ def plot_h3_loadings_symmetric_matrices(
     icn_domain: np.ndarray | None = None,
     *,
     decomposition: str = "ica",
-    dpi: int = 150,
+    dpi: int = 400,
     prefix: str = "h3_fnc_matrix_factor",
 ) -> None:
     """
@@ -844,7 +847,7 @@ def plot_group_mean_fnc_connectivity(
     out_path: Path,
     *,
     icn_domain: np.ndarray | None = None,
-    dpi: int = 200,
+    dpi: int = 400,
 ) -> None:
     """HC mean, SZ mean, and SZ−HC difference heatmaps (Fisher *z* of Pearson *r*)."""
     n_icns = mean_hc.shape[0]
@@ -963,3 +966,397 @@ def plot_group_mean_fnc_connectivity(
     fig.subplots_adjust(left=0.05, right=0.98, top=0.9, bottom=0.12, wspace=0.42)
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
+
+
+_MEAN_FNC_ROW_TITLES: dict[str, str] = {
+    "pearson_z": "Pearson (Fisher z)",
+    "spearman": "Spearman (Fisher z)",
+    "partial_corr": "Partial Correlation (Fisher z)",
+    "mutual_info": "Mutual Information",
+}
+
+_MEAN_FNC_CBAR_MEAN: dict[str, str] = {
+    "pearson_z": "Mean Fisher z (Pearson r)",
+    "spearman": "Mean Fisher z (Spearman ρ)",
+    "partial_corr": "Mean Fisher z (partial ρ)",
+    "mutual_info": "Mean MI",
+}
+
+_MEAN_FNC_CBAR_DIFF: dict[str, str] = {
+    "pearson_z": "Δ Fisher z (SZ - HC)",
+    "spearman": "Δ Fisher z (SZ - HC)",
+    "partial_corr": "Δ Fisher z (SZ - HC)",
+    "mutual_info": "Δ MI (SZ - HC)",
+}
+
+
+def plot_group_mean_fnc_connectivity_multi_rows(
+    rows: Sequence[tuple[str, np.ndarray, np.ndarray]],
+    n_hc: int,
+    n_sz: int,
+    out_path: Path,
+    *,
+    icn_domain: np.ndarray | None = None,
+    dpi: int = 400,
+) -> None:
+    """Grid: one row per connectivity measure, columns = HC mean, SZ mean, SZ−HC."""
+    if not rows:
+        raise ValueError("rows must be non-empty.")
+    n_icns = rows[0][1].shape[0]
+    for _method_key, mean_hc, mean_sz in rows:
+        if mean_hc.shape != (n_icns, n_icns) or mean_sz.shape != (n_icns, n_icns):
+            raise ValueError("All mean_hc / mean_sz must have the same square shape.")
+
+    dom_names: list[str] | None
+    dom_ticks: list[float] | None
+    dom_seps: list[float] | None
+    if icn_domain is not None:
+        dom_arr = np.asarray(icn_domain).ravel()
+        if dom_arr.shape[0] != n_icns:
+            raise ValueError(
+                f"icn_domain length {dom_arr.shape[0]} does not match n_icns {n_icns}."
+            )
+        dom_names, dom_ticks, dom_seps = _domain_tick_labels(dom_arr)
+    else:
+        dom_names = dom_ticks = dom_seps = None
+
+    n_rows = len(rows)
+    fs_suptitle = 34
+    fs_axis = 25
+    fs_dom_tick = 20 if dom_names is not None and len(dom_names) > 12 else 21
+    fs_idx_tick = 23
+    fs_cbar_label = 21
+    fs_cbar_ticks = 19
+    fs_row_label = 25
+    fs_col_header = 30
+
+    fig_w = min(38.0, 6.2 + 0.071 * n_icns * 3)
+    # Tighter row spacing: lower per-row height + smaller hspace below.
+    fig_h = min(44.0, 4 + 3 * n_rows + 0.04 * n_icns * n_rows)
+    fig, axes = plt.subplots(n_rows, 3, figsize=(fig_w, fig_h), squeeze=False)
+
+    cmap = mpl.colormaps["RdBu_r"].copy()
+    cmap.set_bad(color="#e0e0e0")
+
+    tick_stride = max(1, n_icns // 8)
+    tick_idx = np.arange(0, n_icns, tick_stride)
+
+    def _style_domain_axes(ax: Any) -> None:
+        assert dom_names is not None and dom_ticks is not None and dom_seps is not None
+        ax.set_xticks(dom_ticks)
+        ax.set_xticklabels(
+            dom_names, rotation=90, ha="right", fontsize=fs_dom_tick,
+        )
+        ax.set_yticks(dom_ticks)
+        ax.set_yticklabels(dom_names, fontsize=fs_dom_tick)
+        ax.set_xlabel("ICN Domain - Subdomain", fontsize=fs_axis)
+        ax.set_ylabel("ICN Domain - Subdomain", fontsize=fs_axis)
+        for s in dom_seps:
+            ax.axhline(s, color="white", lw=0.55)
+            ax.axvline(s, color="white", lw=0.55)
+
+    def _style_index_axes(ax: Any) -> None:
+        ax.set_xticks(tick_idx)
+        ax.set_yticks(tick_idx)
+        ax.tick_params(axis="both", labelsize=fs_idx_tick)
+        ax.set_xlabel("ICN index", fontsize=fs_axis)
+        ax.set_ylabel("ICN index", fontsize=fs_axis)
+
+    col_titles = (
+        f"Controls (HC), n = {n_hc}",
+        f"Patients (SZ), n = {n_sz}",
+        "Group Difference (SZ - HC)",
+    )
+
+    for r, (method_key, mean_hc, mean_sz) in enumerate(rows):
+        hc = np.array(mean_hc, dtype=np.float64, copy=True)
+        sz = np.array(mean_sz, dtype=np.float64, copy=True)
+        np.fill_diagonal(hc, np.nan)
+        np.fill_diagonal(sz, np.nan)
+        diff = sz - hc
+        np.fill_diagonal(diff, np.nan)
+
+        off_mean = np.concatenate([hc[~np.isnan(hc)], sz[~np.isnan(sz)]])
+        vmax_mean = float(np.nanmax(np.abs(off_mean))) if off_mean.size else 1.0
+        if not np.isfinite(vmax_mean) or vmax_mean < 1e-12:
+            vmax_mean = 1.0
+
+        off_diff = diff[~np.isnan(diff)]
+        vmax_diff = float(np.nanmax(np.abs(off_diff))) if off_diff.size else 1.0
+        if not np.isfinite(vmax_diff) or vmax_diff < 1e-12:
+            vmax_diff = 1.0
+
+        row_title = _MEAN_FNC_ROW_TITLES.get(
+            method_key, str(method_key).replace("_", " ").title()
+        )
+        cbar_mean = _MEAN_FNC_CBAR_MEAN.get(method_key, "Mean connectivity")
+        cbar_diff = _MEAN_FNC_CBAR_DIFF.get(method_key, "Δ (SZ − HC)")
+
+        panels: list[tuple[Any, np.ndarray, str | None, float, str]] = [
+            (axes[r, 0], hc, col_titles[0] if r == 0 else None, vmax_mean, cbar_mean),
+            (axes[r, 1], sz, col_titles[1] if r == 0 else None, vmax_mean, cbar_mean),
+            (axes[r, 2], diff, col_titles[2] if r == 0 else None, vmax_diff, cbar_diff),
+        ]
+
+        for ax, mat, col_title, vm, cbar_lbl in panels:
+            im = ax.imshow(
+                mat,
+                cmap=cmap,
+                vmin=-vm,
+                vmax=vm,
+                aspect="equal",
+                origin="upper",
+                interpolation="nearest",
+            )
+            if col_title is not None:
+                ax.set_title(col_title, fontsize=fs_col_header, pad=4)
+            if dom_names is not None:
+                _style_domain_axes(ax)
+            else:
+                _style_index_axes(ax)
+
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="4.5%", pad=0.11)
+            cb = fig.colorbar(im, cax=cax)
+            cb.set_label(cbar_lbl, fontsize=fs_cbar_label)
+            cb.ax.tick_params(labelsize=fs_cbar_ticks)
+
+        axes[r, 0].annotate(
+            row_title,
+            xy=(-0.24, 0.5),
+            xycoords="axes fraction",
+            rotation=90,
+            va="center",
+            ha="right",
+            fontsize=fs_row_label,
+        )
+
+    # fig.suptitle(
+    #     "Mean functional network connectivity by measure (HC, SZ, group difference)",
+    #     fontsize=fs_suptitle,
+    #     y=0.99,
+    # )
+    # Larger top pulls the grid up under the suptitle (tighter gap than top≈0.93, y≈0.998).
+    fig.subplots_adjust(left=0.11, right=0.98, top=0.97, bottom=0.05, wspace=0.36, hspace=0.10)
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_group_mean_fnc_connectivity_groups_as_rows(
+    rows: Sequence[tuple[str, np.ndarray, np.ndarray]],
+    n_hc: int,
+    n_sz: int,
+    out_path: Path,
+    *,
+    icn_domain: np.ndarray | None = None,
+    dpi: int = 400,
+) -> None:
+    """Grid: rows = HC mean, SZ mean, SZ−HC; columns = one connectivity measure each."""
+    if not rows:
+        raise ValueError("rows must be non-empty.")
+    n_icns = rows[0][1].shape[0]
+    for _method_key, mean_hc, mean_sz in rows:
+        if mean_hc.shape != (n_icns, n_icns) or mean_sz.shape != (n_icns, n_icns):
+            raise ValueError("All mean_hc / mean_sz must have the same square shape.")
+
+    dom_names: list[str] | None
+    dom_ticks: list[float] | None
+    dom_seps: list[float] | None
+    if icn_domain is not None:
+        dom_arr = np.asarray(icn_domain).ravel()
+        if dom_arr.shape[0] != n_icns:
+            raise ValueError(
+                f"icn_domain length {dom_arr.shape[0]} does not match n_icns {n_icns}."
+            )
+        dom_names, dom_ticks, dom_seps = _domain_tick_labels(dom_arr)
+    else:
+        dom_names = dom_ticks = dom_seps = None
+
+    n_cols = len(rows)
+    fs_axis = 25
+    fs_dom_tick = 20 if dom_names is not None and len(dom_names) > 12 else 21
+    fs_idx_tick = 23
+    fs_cbar_label = 21
+    fs_cbar_ticks = 19
+    fs_row_label = 25
+    fs_col_header = 30
+
+    fig_w = min(50.0, 6.4 + 0.075 * n_icns * n_cols)
+    fig_h = min(30.0, 4 + 3 * 3 + 0.04 * n_icns * 3)
+    fig, axes = plt.subplots(3, n_cols, figsize=(fig_w, fig_h), squeeze=False)
+
+    cmap = mpl.colormaps["RdBu_r"].copy()
+    cmap.set_bad(color="#e0e0e0")
+
+    tick_stride = max(1, n_icns // 8)
+    tick_idx = np.arange(0, n_icns, tick_stride)
+
+    def _style_domain_axes(ax: Any) -> None:
+        assert dom_names is not None and dom_ticks is not None and dom_seps is not None
+        ax.set_xticks(dom_ticks)
+        ax.set_xticklabels(
+            dom_names, rotation=90, ha="right", fontsize=fs_dom_tick,
+        )
+        ax.set_yticks(dom_ticks)
+        ax.set_yticklabels(dom_names, fontsize=fs_dom_tick)
+        ax.set_xlabel("ICN Domain - Subdomain", fontsize=fs_axis)
+        ax.set_ylabel("ICN Domain - Subdomain", fontsize=fs_axis)
+        for s in dom_seps:
+            ax.axhline(s, color="white", lw=0.55)
+            ax.axvline(s, color="white", lw=0.55)
+
+    def _style_index_axes(ax: Any) -> None:
+        ax.set_xticks(tick_idx)
+        ax.set_yticks(tick_idx)
+        ax.tick_params(axis="both", labelsize=fs_idx_tick)
+        ax.set_xlabel("ICN index", fontsize=fs_axis)
+        ax.set_ylabel("ICN index", fontsize=fs_axis)
+
+    row_titles = (
+        f"Controls (HC), n = {n_hc}",
+        f"Patients (SZ), n = {n_sz}",
+        "Group Difference (SZ - HC)",
+    )
+
+    for c, (method_key, mean_hc, mean_sz) in enumerate(rows):
+        hc = np.array(mean_hc, dtype=np.float64, copy=True)
+        sz = np.array(mean_sz, dtype=np.float64, copy=True)
+        np.fill_diagonal(hc, np.nan)
+        np.fill_diagonal(sz, np.nan)
+        diff = sz - hc
+        np.fill_diagonal(diff, np.nan)
+
+        off_mean = np.concatenate([hc[~np.isnan(hc)], sz[~np.isnan(sz)]])
+        vmax_mean = float(np.nanmax(np.abs(off_mean))) if off_mean.size else 1.0
+        if not np.isfinite(vmax_mean) or vmax_mean < 1e-12:
+            vmax_mean = 1.0
+
+        off_diff = diff[~np.isnan(diff)]
+        vmax_diff = float(np.nanmax(np.abs(off_diff))) if off_diff.size else 1.0
+        if not np.isfinite(vmax_diff) or vmax_diff < 1e-12:
+            vmax_diff = 1.0
+
+        col_title = _MEAN_FNC_ROW_TITLES.get(
+            method_key, str(method_key).replace("_", " ").title()
+        )
+        cbar_mean = _MEAN_FNC_CBAR_MEAN.get(method_key, "Mean connectivity")
+        cbar_diff = _MEAN_FNC_CBAR_DIFF.get(method_key, "Δ (SZ − HC)")
+
+        panels: list[tuple[int, np.ndarray, str | None, float, str]] = [
+            (0, hc, col_title, vmax_mean, cbar_mean),
+            (1, sz, None, vmax_mean, cbar_mean),
+            (2, diff, None, vmax_diff, cbar_diff),
+        ]
+
+        for row_idx, mat, title, vm, cbar_lbl in panels:
+            ax = axes[row_idx, c]
+            im = ax.imshow(
+                mat,
+                cmap=cmap,
+                vmin=-vm,
+                vmax=vm,
+                aspect="equal",
+                origin="upper",
+                interpolation="nearest",
+            )
+            if title is not None:
+                ax.set_title(title, fontsize=fs_col_header, pad=4)
+            if dom_names is not None:
+                _style_domain_axes(ax)
+            else:
+                _style_index_axes(ax)
+
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="4.5%", pad=0.11)
+            cb = fig.colorbar(im, cax=cax)
+            cb.set_label(cbar_lbl, fontsize=fs_cbar_label)
+            cb.ax.tick_params(labelsize=fs_cbar_ticks)
+
+    for row_idx, row_title in enumerate(row_titles):
+        axes[row_idx, 0].annotate(
+            row_title,
+            xy=(-0.24, 0.5),
+            xycoords="axes fraction",
+            rotation=90,
+            va="center",
+            ha="right",
+            fontsize=fs_row_label,
+        )
+
+    fig.subplots_adjust(left=0.11, right=0.98, top=0.97, bottom=0.05, wspace=0.36, hspace=0.10)
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_group_mean_fnc_all_connectivity_measures(
+    time_courses: np.ndarray,
+    y: np.ndarray,
+    out_path: Path,
+    *,
+    measures: Sequence[ConnectivityMethod] | None = None,
+    icn_domain: np.ndarray | None = None,
+    dpi: int = 400,
+    cache_dir: Path | None = None,
+    force_recompute: bool = False,
+    groups_as_rows: bool = False,
+) -> tuple[int, int, int]:
+    """Write all-measures figure; uses ``cache_dir`` .npy files when present unless forced.
+
+    With ``groups_as_rows=False`` (default), layout is |measures| rows × 3 columns
+    (HC, SZ, SZ−HC). With ``groups_as_rows=True``, layout is 3 rows × |measures| columns.
+    """
+    from fbirn_experiment.connectivity import (  # noqa: PLC0415
+        CONNECTIVITY_METHODS,
+        compute_group_mean_connectivity_rows,
+    )
+    from fbirn_experiment.connectivity_cache import (  # noqa: PLC0415
+        save_group_mean_connectivity_cache,
+        try_load_group_mean_connectivity_cache,
+        validate_cache_matches_data,
+    )
+
+    order: list[ConnectivityMethod] = (
+        list(measures) if measures is not None else list(CONNECTIVITY_METHODS)
+    )
+    rows_data: list[tuple[str, np.ndarray, np.ndarray]]
+    n_hc: int
+    n_sz: int
+    n_icns: int
+
+    cache_path = Path(cache_dir) if cache_dir is not None else None
+    loaded = None
+    if cache_path is not None and not force_recompute:
+        loaded = try_load_group_mean_connectivity_cache(cache_path, order)
+    if loaded is not None:
+        rows_data, n_hc, n_sz, n_icns = loaded
+        validate_cache_matches_data(
+            time_courses, y, n_hc=n_hc, n_sz=n_sz, n_icns=n_icns
+        )
+    else:
+        rows_data, n_hc, n_sz, n_icns = compute_group_mean_connectivity_rows(
+            time_courses, y, order
+        )
+        if cache_path is not None:
+            save_group_mean_connectivity_cache(cache_path, rows_data, n_hc, n_sz)
+
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if groups_as_rows:
+        plot_group_mean_fnc_connectivity_groups_as_rows(
+            rows_data,
+            n_hc,
+            n_sz,
+            out,
+            icn_domain=icn_domain,
+            dpi=dpi,
+        )
+    else:
+        plot_group_mean_fnc_connectivity_multi_rows(
+            rows_data,
+            n_hc,
+            n_sz,
+            out,
+            icn_domain=icn_domain,
+            dpi=dpi,
+        )
+    return n_hc, n_sz, n_icns

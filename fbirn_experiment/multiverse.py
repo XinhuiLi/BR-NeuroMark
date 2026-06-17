@@ -41,14 +41,16 @@ from fbirn_experiment.confounds import (
 from fbirn_experiment.connectivity import (
     CONNECTIVITY_METHODS,
     ConnectivityMethod,
+    edge_domain_mask,
     fnc_edges,
+    triu_indices,
 )
+from fbirn_experiment.connectivity_cache import get_or_compute_connectivity_edges
 from fbirn_experiment.domain_labels import (
     DOMAIN_GRANULARITIES,
     DomainGranularity,
     aggregate_domains,
 )
-from fbirn_experiment.fnc import edge_domain_mask, triu_indices
 from fbirn_experiment.h1_cv import FactorAnalysisTransform, FastICATransform
 from fbirn_experiment.h2_test import h2_domain_label_permutation_test
 
@@ -549,7 +551,7 @@ def _run_spec_inner(
         h1_auc_latent=h1_auc_l,
         h1_delta_auc=h1_delta,
         h2_delta_d=float(h2["observed_delta_mean_abs_d"]),
-        h2_p=float(h2["p_value_two_sided"]),
+        h2_p=float(h2["p_value_one_sided"]),
         h3_wilcoxon_p=float(h3_wilcoxon_p),
         h3_n_factors=h3_n_factors,
         h3_between_gt_within=h3_between_gt,
@@ -700,14 +702,18 @@ def run_multiverse(
         df.to_csv(out / "multiverse_results.csv", index=False)
         return df
 
-    # ── Pre-compute edges ────────────────────────────────────────────────
+    # ── Reusable connectivity edge matrices ─────────────────────────────
     edge_cache: dict[str, tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]] = {}
+    edge_cache_dir = out / "connectivity_cache"
     conn_methods = sorted({s.connectivity for s in pending})
     for cm in conn_methods:
-        print(f"Pre-computing FNC edges: {cm} ...")
-        edge_cache[cm] = fnc_edges(time_courses, method=cm)
+        edge_cache[cm], cache_hit = get_or_compute_connectivity_edges(
+            edge_cache_dir, cm, time_courses
+        )
+        action = "Loaded cached" if cache_hit else "Computed and cached"
+        print(f"{action} FNC edges: {cm} → {edge_cache_dir}")
 
-    # ── Common kwargs for _run_spec_with_precomputed_edges ───────────────
+    # ── Common spec execution kwargs ────────────────────────────────────
     common_kw: dict[str, Any] = dict(
         confound_csv=confound_csv,
         confound_cols=confound_cols,
@@ -961,7 +967,7 @@ def _run_spec_with_precomputed_edges(
         h1_auc_latent=h1_auc_l,
         h1_delta_auc=h1_delta,
         h2_delta_d=float(h2["observed_delta_mean_abs_d"]),
-        h2_p=float(h2["p_value_two_sided"]),
+        h2_p=float(h2["p_value_one_sided"]),
         h3_wilcoxon_p=float(h3_wilcoxon_p),
         h3_n_factors=h3_n_factors,
         h3_between_gt_within=h3_between_gt,

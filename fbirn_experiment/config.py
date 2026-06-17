@@ -12,4 +12,4 @@ DEFAULT_ICN_DOMAIN_PATH = DEFAULT_DATA_DIR / "FBIRN_icn_domain-subdomain_label.n
 DEFAULT_NEUROMARK_XLSX_PATH = DEFAULT_DATA_DIR / "Neuromark_fMRI_2-2_labels_final.xlsx"
 DEFAULT_CONFOUND_CSV_PATH = DEFAULT_DATA_DIR / "FBIRN_data.csv"
 
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "fbirn_icn_run"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "single_pipeline"

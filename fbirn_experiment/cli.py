@@ -15,7 +15,6 @@ from fbirn_experiment.config import (
 )
 from fbirn_experiment.confounds import DEFAULT_CONFOUND_COLS
 from fbirn_experiment.io_data import load_fbirn_tc_and_labels, load_npz, synthetic_dataset
-from fbirn_experiment.pipeline import run_experiment
 
 
 def main() -> None:
@@ -279,7 +278,9 @@ def _add_mean_fnc_matrices_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "mean-fnc-matrices",
         help=(
-            "Plot mean Fisher-z Pearson FNC matrices (controls vs patients) from ICN time courses."
+            "Plot mean FNC matrices (controls vs patients) from ICN time courses; "
+            "use --all-measures for a 4×3 grid (measures × HC/SZ/diff), or "
+            "--all-measures --groups-as-rows for a 3×4 grid (groups × measures)."
         ),
     )
     p.add_argument("--synthetic", action="store_true", help="Use synthetic data")
@@ -293,18 +294,61 @@ def _add_mean_fnc_matrices_parser(sub: argparse._SubParsersAction) -> None:
         help="Single .npz with time_courses, y, icn_domain (overrides --tc/--labels)",
     )
     p.add_argument(
+        "--all-measures",
+        action="store_true",
+        help=(
+            "Plot all connectivity measures in one figure: rows = pearson_z, spearman, "
+            "partial_corr, mutual_info; columns = HC, SZ, SZ−HC. "
+            "Mutual information is expensive for large n_subj × n_icns."
+        ),
+    )
+    p.add_argument(
+        "--groups-as-rows",
+        action="store_true",
+        help=(
+            "With --all-measures, use a 3×4 layout instead: rows = HC, SZ, group difference; "
+            "columns = pearson_z, spearman, partial_corr, mutual_info."
+        ),
+    )
+    p.add_argument(
         "-o",
         "--out",
         type=Path,
-        default=Path("figures/mean_fnc_pearson_z_hc_sz.png"),
-        help="Output PNG path.",
+        default=None,
+        help="Output PNG path (defaults: figures/mean_fnc_pearson_z_hc_sz.png, "
+        "figures/mean_fnc_all_measures_hc_sz.pdf with --all-measures, or "
+        "figures/mean_fnc_groups_as_rows_hc_sz.pdf with --all-measures --groups-as-rows).",
     )
     p.add_argument("--dpi", type=int, default=200)
+    p.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Directory for group-mean connectivity caches: n_hc.npy, n_sz.npy, "
+            "mean_hc__<measure>.npy, mean_sz__<measure>.npy, and meta.json. "
+            "If these files exist for the requested measures, matrices are loaded "
+            "instead of recomputed (use --force-recompute to ignore)."
+        ),
+    )
+    p.add_argument(
+        "--force-recompute",
+        action="store_true",
+        help="Ignore --cache-dir on-disk matrices and overwrite them after recomputing.",
+    )
 
 
 def _run_mean_fnc_matrices_cmd(args: argparse.Namespace) -> None:
-    from fbirn_experiment.figures import plot_group_mean_fnc_connectivity  # noqa: PLC0415
-    from fbirn_experiment.fnc import group_mean_pearson_fisher_z_matrices  # noqa: PLC0415
+    from fbirn_experiment.figures import (  # noqa: PLC0415
+        plot_group_mean_fnc_all_connectivity_measures,
+        plot_group_mean_fnc_connectivity,
+    )
+    from fbirn_experiment.connectivity import group_mean_pearson_fisher_z_matrices  # noqa: PLC0415
+    from fbirn_experiment.connectivity_cache import (  # noqa: PLC0415
+        save_group_mean_connectivity_cache,
+        try_load_group_mean_connectivity_cache,
+        validate_cache_matches_data,
+    )
 
     if args.synthetic:
         tc, y, _icn_domain = synthetic_dataset()
@@ -317,19 +361,67 @@ def _run_mean_fnc_matrices_cmd(args: argparse.Namespace) -> None:
             args.icn_domain,
         )
 
-    mean_hc, mean_sz, n_hc, n_sz = group_mean_pearson_fisher_z_matrices(tc, y)
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    plot_group_mean_fnc_connectivity(
-        mean_hc,
-        mean_sz,
-        n_hc,
-        n_sz,
-        out,
-        icn_domain=_icn_domain,
-        dpi=int(args.dpi),
-    )
-    print(f"Wrote {out} (HC n={n_hc}, SZ n={n_sz}, ICNs={mean_hc.shape[0]})")
+    groups_as_rows = bool(args.groups_as_rows)
+    if groups_as_rows and not args.all_measures:
+        raise SystemExit("--groups-as-rows requires --all-measures.")
+
+    if args.out is not None:
+        out = Path(args.out)
+    elif args.all_measures and groups_as_rows:
+        out = Path("figures/mean_fnc_groups_as_rows_hc_sz.pdf")
+    elif args.all_measures:
+        out = Path("figures/mean_fnc_all_measures_hc_sz.pdf")
+    else:
+        out = Path("figures/mean_fnc_pearson_z_hc_sz.pdf")
+
+    cache_path = Path(args.cache_dir) if args.cache_dir is not None else None
+    force = bool(args.force_recompute)
+
+    if args.all_measures:
+        n_hc, n_sz, n_icns = plot_group_mean_fnc_all_connectivity_measures(
+            tc,
+            y,
+            out,
+            icn_domain=_icn_domain,
+            dpi=int(args.dpi),
+            cache_dir=cache_path,
+            force_recompute=force,
+            groups_as_rows=groups_as_rows,
+        )
+        layout = "3×4 (groups × measures)" if groups_as_rows else "4×3 (measures × groups)"
+        print(
+            f"Wrote {out} (HC n={n_hc}, SZ n={n_sz}, ICNs={n_icns}, all measures, {layout})"
+        )
+    else:
+        loaded = None
+        if cache_path is not None and not force:
+            loaded = try_load_group_mean_connectivity_cache(cache_path, ["pearson_z"])
+        if loaded is not None:
+            rows, n_hc, n_sz, _n_icns = loaded
+            validate_cache_matches_data(
+                tc, y, n_hc=n_hc, n_sz=n_sz, n_icns=_n_icns
+            )
+            mean_hc, mean_sz = rows[0][1], rows[0][2]
+        else:
+            mean_hc, mean_sz, n_hc, n_sz = group_mean_pearson_fisher_z_matrices(tc, y)
+            if cache_path is not None:
+                save_group_mean_connectivity_cache(
+                    cache_path,
+                    [("pearson_z", mean_hc, mean_sz)],
+                    n_hc,
+                    n_sz,
+                )
+        out.parent.mkdir(parents=True, exist_ok=True)
+        plot_group_mean_fnc_connectivity(
+            mean_hc,
+            mean_sz,
+            n_hc,
+            n_sz,
+            out,
+            icn_domain=_icn_domain,
+            dpi=int(args.dpi),
+        )
+        print(f"Wrote {out} (HC n={n_hc}, SZ n={n_sz}, ICNs={mean_hc.shape[0]})")
 
 
 def _add_plot_confounds_parser(sub: argparse._SubParsersAction) -> None:
@@ -494,7 +586,7 @@ def _populate_run_args(parser: argparse.ArgumentParser) -> None:
         default="bic",
         help="Information criterion for FA component count on each outer-training fold.",
     )
-    parser.add_argument("--h2-perm", type=int, default=2000)
+    parser.add_argument("--h2-perm", type=int, default=500)
     parser.add_argument(
         "--h3-no-bic",
         action="store_true",
@@ -531,6 +623,8 @@ def _populate_run_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _run_main_cmd(args: argparse.Namespace) -> None:
+    from fbirn_experiment.pipeline import run_experiment  # noqa: PLC0415
+
     if args.synthetic:
         tc, y, icn_domain = synthetic_dataset()
     elif args.npz:

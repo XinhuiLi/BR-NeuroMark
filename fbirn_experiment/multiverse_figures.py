@@ -13,12 +13,13 @@ from scipy import stats as sp_stats
 
 
 FORK_COLS = ["connectivity", "confound", "reduction", "classifier", "domain_granularity"]
+H2_FORK_COLS = ["connectivity", "confound", "domain_granularity"]
 FORK_LABELS = {
-    "connectivity": "D1: Connectivity",
-    "confound": "D2: Confound",
-    "reduction": "D3: Reduction",
-    "classifier": "D4: Classifier",
-    "domain_granularity": "D5: Domain",
+    "connectivity": "D1 Connectivity",
+    "confound": "D2 Confound",
+    "reduction": "D3 Reduction",
+    "classifier": "D4 Classifier",
+    "domain_granularity": "D5 Domain",
 }
 
 # Human-readable option labels (raw multiverse codes → plot / table text).
@@ -26,36 +27,36 @@ _FORK_LEVEL_DISPLAY: dict[str, dict[str, str]] = {
     "connectivity": {
         "pearson_z": "Pearson (Fisher z)",
         "spearman": "Spearman",
-        "partial_corr": "Partial correlation",
-        "mutual_info": "Mutual information",
+        "partial_corr": "Partial Correlation",
+        "mutual_info": "Mutual Information",
     },
     "confound": {
         "none": "None",
-        "ols": "OLS confound removal",
-        "combat": "ComBat harmonization",
+        "ols": "OLS Confound Removal",
+        "combat": "ComBat Harmonization",
     },
     "reduction": {
-        "none": "No reduction (edges only)",
-        "fa": "Factor analysis",
+        "none": "No Reduction (Edges Only)",
+        "fa": "Factor Analysis",
         "ica": "ICA",
         "pca": "PCA",
         "nmf": "NMF",
     },
     "classifier": {
-        "elasticnet": "Elastic net",
-        "logistic_l2": "Logistic regression (L2)",
+        "elasticnet": "Elastic Net",
+        "logistic_l2": "Logistic Regression",
         "svm_linear": "Linear SVM",
-        "rf": "Random forest",
+        "rf": "Random Forest",
     },
     "domain_granularity": {
-        "subdomain_14": "14 subdomains",
-        "domain_7": "7 domains",
+        "subdomain_14": "14 Subdomains",
+        "domain_7": "7 Domains",
     },
 }
 
 _OUTCOME_COL_DISPLAY: dict[str, str] = {
-    "h1_delta_auc": "ΔAUC (latent − edges)",
-    "h2_delta_d": "Δ mean |Cohen's d|",
+    "h1_delta_auc": "ΔAUC (Latent - Edges)",
+    "h2_delta_d": "Δ Mean |Cohen's d|",
     "h3_wilcoxon_p": "Wilcoxon p-value",
 }
 
@@ -76,10 +77,10 @@ def format_outcome_axis_label(outcome_col: str) -> str:
     """Axis label for forest plots (column is still the raw key in data)."""
     return _OUTCOME_COL_DISPLAY.get(outcome_col, outcome_col.replace("_", " "))
 
-_FONT_TITLE = 15
-_FONT_LABEL = 13
-_FONT_TICK = 11
-_FONT_LEGEND = 11
+_FONT_TITLE = 18
+_FONT_LABEL = 16
+_FONT_TICK = 14
+_FONT_LEGEND = 14
 
 # tab20c: 20 colors as 5 groups × 4 shades — same hue family per domain (fork),
 # distinct shades for each option within the domain.
@@ -96,8 +97,8 @@ def _tab20c_domain_level_color(fork_idx: int, level_idx: int) -> tuple:
     return _TAB20C(slot / (_N_TAB20C - 1))
 
 
-_COLOR_GREEN = "#2ca02c"
-_COLOR_RED = "#d62728"
+_COLOR_GREEN = "lightskyblue" #"#2ca02c"
+_COLOR_RED = "lightpink" #"#d62728"
 
 
 def _sort_df(df: pd.DataFrame, outcome_col: str) -> pd.DataFrame:
@@ -105,6 +106,42 @@ def _sort_df(df: pd.DataFrame, outcome_col: str) -> pd.DataFrame:
     dfc = df.dropna(subset=[outcome_col]).copy()
     dfc = dfc.sort_values(outcome_col).reset_index(drop=True)
     return dfc
+
+
+def h2_unique_pipelines(df: pd.DataFrame) -> pd.DataFrame:
+    """Collapse H2 rows to unique pipelines.
+
+    H2 depends on connectivity, confound handling, and domain granularity.
+    Reduction and classifier choices are irrelevant for H2, so duplicated
+    full-grid rows should not inflate H2 counts or visual summaries.
+    """
+    missing = [c for c in H2_FORK_COLS if c not in df.columns]
+    if missing:
+        return df.copy()
+    work = df.copy()
+    sort_cols = ["spec_id"] if "spec_id" in work.columns else H2_FORK_COLS
+    if "h2_p" in work.columns:
+        work["_h2_missing"] = work["h2_p"].isna()
+        sort_cols = ["_h2_missing", *sort_cols]
+    collapsed = (
+        work.sort_values(sort_cols)
+        .drop_duplicates(subset=H2_FORK_COLS, keep="first")
+        .reset_index(drop=True)
+    )
+    return collapsed.drop(columns=["_h2_missing"], errors="ignore")
+
+
+def h2_favourable_mask(df: pd.DataFrame, alpha: float = 0.05) -> pd.Series:
+    """H2 is favourable only when significant and directionally positive."""
+    return (df["h2_p"] < alpha) & (df["h2_delta_d"] > 0)
+
+
+def h2_with_favourable(df: pd.DataFrame, alpha: float = 0.05) -> pd.DataFrame:
+    """Return unique H2 pipelines with a direction-aware favourable flag."""
+    h2 = h2_unique_pipelines(df).dropna(subset=["h2_p", "h2_delta_d"]).copy()
+    if not h2.empty:
+        h2["h2_favourable"] = h2_favourable_mask(h2, alpha)
+    return h2
 
 
 def _tile_ax(
@@ -156,7 +193,7 @@ def _tile_ax(
     ax.set_yticklabels(y_labels, fontsize=_FONT_TICK)
     ax.set_xlim(-0.5, n_specs - 0.5)
     ax.set_ylim(len(y_labels) - 0.5, -0.5)
-    ax.set_xlabel("Specification (sorted)", fontsize=_FONT_LABEL)
+    ax.set_xlabel("Specification", fontsize=_FONT_LABEL)
     ax.tick_params(axis="x", labelsize=_FONT_TICK)
     ax.set_facecolor("#f7f7f7")
 
@@ -164,25 +201,25 @@ def _tile_ax(
 # ── Specification curve plots ────────────────────────────────────────────
 
 
-def plot_spec_curve_h1(df: pd.DataFrame, out_path: Path, *, dpi: int = 200) -> None:
-    """Specification curve for H1: ΔAUC (latent − edges)."""
+def plot_spec_curve_h1(df: pd.DataFrame, out_path: Path, *, dpi: int = 400) -> None:
+    """Specification curve for H1: ΔAUC (Latent - Edges)."""
     dfc = _sort_df(df, "h1_delta_auc")
     if dfc.empty:
         return
 
     fig, (ax_top, ax_bot) = plt.subplots(
-        2, 1, figsize=(14, 7), sharex=True,
+        2, 1, figsize=(18, 8), sharex=True,
         gridspec_kw={"height_ratios": [2, 3], "hspace": 0.12},
     )
     xs = np.arange(len(dfc))
 
     colors = np.where(dfc["h1_delta_auc"].values > 0, _COLOR_GREEN, _COLOR_RED)
-    ax_top.bar(xs, dfc["h1_delta_auc"].values, color=colors, width=1.0, linewidth=0)
+    ax_top.bar(xs, dfc["h1_delta_auc"].values, color=colors, alpha=0.85, width=1.0, linewidth=0)
     ax_top.axhline(0, color="k", lw=0.7)
-    ax_top.set_ylabel("ΔAUC (latent − edges)", fontsize=_FONT_LABEL)
+    ax_top.set_ylabel("ΔAUC (Latent - Edges)", fontsize=_FONT_LABEL)
     ax_top.set_title("H1 Specification Curve: Classification Performance", fontsize=_FONT_TITLE)
     med = dfc["h1_delta_auc"].median()
-    ax_top.axhline(med, color="#e78ac3", ls="--", lw=1.2, label=f"median = {med:.3f}")
+    ax_top.axhline(med, color="#e78ac3", ls="--", lw=1.2, label=f"Median = {med:.3f}")
     ax_top.legend(fontsize=_FONT_LEGEND, loc="upper left")
     ax_top.tick_params(labelsize=_FONT_TICK)
 
@@ -194,32 +231,32 @@ def plot_spec_curve_h1(df: pd.DataFrame, out_path: Path, *, dpi: int = 200) -> N
     print(f"Saved {out_path}")
 
 
-def plot_spec_curve_h2(df: pd.DataFrame, out_path: Path, *, dpi: int = 200) -> None:
-    """Specification curve for H2: Δ mean|d| and p-value."""
+def plot_spec_curve_h2(df: pd.DataFrame, out_path: Path, *, dpi: int = 400) -> None:
+    """Specification curve for H2: Δ|d| and p-value."""
     cols_needed = ["h2_delta_d", "h2_p"]
     for c in cols_needed:
         if c not in df.columns:
             return
-    dfc = _sort_df(df, "h2_delta_d")
+    dfc = _sort_df(h2_unique_pipelines(df), "h2_delta_d")
     if dfc.empty:
         return
 
     fig, (ax_top, ax_bot) = plt.subplots(
-        2, 1, figsize=(14, 7), sharex=True,
+        2, 1, figsize=(18, 8), sharex=True,
         gridspec_kw={"height_ratios": [2.5, 3], "hspace": 0.08},
     )
     xs = np.arange(len(dfc))
 
     h2_colors = np.where(dfc["h2_delta_d"].values > 0, _COLOR_GREEN, _COLOR_RED)
-    ax_top.bar(xs, dfc["h2_delta_d"].values, color=h2_colors, width=1.0, linewidth=0, zorder=1)
+    ax_top.bar(xs, dfc["h2_delta_d"].values, color=h2_colors, alpha=0.85, width=1.0, linewidth=0, zorder=1)
     ax_top.axhline(0, color="k", lw=0.7)
-    ax_top.set_ylabel("Δ mean|d|", fontsize=_FONT_LABEL)
+    ax_top.set_ylabel("Δ Mean |Cohen's d|", fontsize=_FONT_LABEL)
     ax_top.set_title("H2 Specification Curve: Between- vs. Within-Domain", fontsize=_FONT_TITLE)
     ax_top.tick_params(labelsize=_FONT_TICK)
 
     ax_p = ax_top.twinx()
     ax_p.scatter(
-        xs, dfc["h2_p"].values, s=18, color="#e78ac3", alpha=0.85, zorder=3,
+        xs, dfc["h2_p"].values, s=5, color="red", alpha=0.6, zorder=3,
         label="Permutation p",
     )
     ax_p.axhline(0.05, color="red", ls="--", lw=1.0, label="p = 0.05")
@@ -228,7 +265,7 @@ def plot_spec_curve_h2(df: pd.DataFrame, out_path: Path, *, dpi: int = 200) -> N
     ax_p.tick_params(labelsize=_FONT_TICK)
     ax_p.legend(fontsize=_FONT_LEGEND, loc="upper left")
 
-    _tile_ax(ax_bot, dfc)
+    _tile_ax(ax_bot, dfc, fork_cols=H2_FORK_COLS)
 
     fig.subplots_adjust(hspace=0.12)
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
@@ -236,7 +273,7 @@ def plot_spec_curve_h2(df: pd.DataFrame, out_path: Path, *, dpi: int = 200) -> N
     print(f"Saved {out_path}")
 
 
-def plot_spec_curve_h3(df: pd.DataFrame, out_path: Path, *, dpi: int = 200) -> None:
+def plot_spec_curve_h3(df: pd.DataFrame, out_path: Path, *, dpi: int = 400) -> None:
     """Specification curve for H3: Wilcoxon p-value for between > within loadings."""
     dfc = df.dropna(subset=["h3_wilcoxon_p"]).copy()
     dfc = dfc[dfc["reduction"] != "none"].copy()
@@ -245,15 +282,15 @@ def plot_spec_curve_h3(df: pd.DataFrame, out_path: Path, *, dpi: int = 200) -> N
     dfc = dfc.sort_values("h3_wilcoxon_p").reset_index(drop=True)
 
     fig, (ax_p, ax_bot) = plt.subplots(
-        2, 1, figsize=(14, 7), sharex=True,
+        2, 1, figsize=(18, 8), sharex=True,
         gridspec_kw={"height_ratios": [2, 3], "hspace": 0.08},
     )
     xs = np.arange(len(dfc))
 
     colors = np.where(dfc["h3_wilcoxon_p"].values < 0.05, _COLOR_GREEN, _COLOR_RED)
-    ax_p.bar(xs, -np.log10(dfc["h3_wilcoxon_p"].values), color=colors, width=1.0, linewidth=0)
+    ax_p.bar(xs, -np.log10(dfc["h3_wilcoxon_p"].values), color=colors, alpha=0.85, width=1.0, linewidth=0)
     ax_p.axhline(-np.log10(0.05), color="red", ls="--", lw=1.0, label="p = 0.05")
-    ax_p.set_ylabel("−log₁₀(p)", fontsize=_FONT_LABEL)
+    ax_p.set_ylabel("−log$_{10}$(p)", fontsize=_FONT_LABEL)
     ax_p.set_title("H3 Specification Curve: Factor Loading Structure", fontsize=_FONT_TITLE)
     ax_p.legend(fontsize=_FONT_LEGEND, loc="upper right")
     ax_p.tick_params(labelsize=_FONT_TICK)
@@ -275,8 +312,9 @@ def plot_forest(
     title: str,
     out_path: Path,
     *,
-    dpi: int = 200,
+    dpi: int = 400,
     n_boot: int = 2000,
+    fork_cols: list[str] | None = None,
 ) -> None:
     """Scatter-violin-box plot of marginal influence per fork level.
 
@@ -292,7 +330,7 @@ def plot_forest(
     rng = np.random.default_rng(42)
 
     fork_boundaries: list[int] = []
-    for fork_idx, fork in enumerate(FORK_COLS):
+    for fork_idx, fork in enumerate(fork_cols or FORK_COLS):
         if fork not in dfc.columns:
             continue
         levels = sorted(dfc[fork].dropna().unique().tolist())
@@ -317,7 +355,7 @@ def plot_forest(
         return
 
     n_rows = len(entries)
-    fig, ax = plt.subplots(figsize=(8, 0.5 * n_rows + 1.5))
+    fig, ax = plt.subplots(figsize=(10, 0.5 * n_rows + 1.5))
     grand_mean = dfc[outcome_col].mean()
 
     for i, e in enumerate(entries):
@@ -400,15 +438,15 @@ def robustness_table(df: pd.DataFrame) -> pd.DataFrame:
         })
 
     # H2
-    h2_df = df.dropna(subset=["h2_p"])
+    h2_df = h2_with_favourable(df)
     if not h2_df.empty:
         n_total = len(h2_df)
-        n_sig = int((h2_df["h2_p"] < 0.05).sum())
+        n_fav = int(h2_df["h2_favourable"].sum())
         rows.append({
             "Hypothesis": "H2: Between > Within",
             "Total specs": n_total,
-            "# Favourable": n_sig,
-            "% Robust": f"{100 * n_sig / n_total:.1f}",
+            "# Favourable": n_fav,
+            "% Robust": f"{100 * n_fav / n_total:.1f}",
             "Median effect": f"{h2_df['h2_delta_d'].median():.4f}",
         })
 
@@ -435,6 +473,7 @@ def conditional_robustness(
     outcome_col: str,
     threshold: float = 0.05,
     direction: str = "less",
+    fork_cols: list[str] | None = None,
 ) -> pd.DataFrame:
     """Report robustness conditional on each fork level.
 
@@ -447,14 +486,16 @@ def conditional_robustness(
         dfc = dfc[dfc["reduction"] != "none"]
 
     rows = []
-    for fork in FORK_COLS:
+    for fork in (fork_cols or FORK_COLS):
         if fork not in dfc.columns:
             continue
         for lev in sorted(dfc[fork].dropna().unique()):
             sub = dfc[dfc[fork] == lev]
             if sub.empty:
                 continue
-            if direction == "less":
+            if direction == "truthy":
+                n_sig = int(sub[outcome_col].astype(bool).sum())
+            elif direction == "less":
                 n_sig = int((sub[outcome_col] < threshold).sum())
             else:
                 n_sig = int((sub[outcome_col] > threshold).sum())
@@ -463,8 +504,8 @@ def conditional_robustness(
                 "Fork": FORK_LABELS.get(fork, fork),
                 "Level": format_fork_level(fork, lev),
                 "Total": len(sub),
-                "# Significant": n_sig,
-                "% Significant": f"{100 * n_sig / len(sub):.1f}",
+                "# Favourable": n_sig,
+                "% Favourable": f"{100 * n_sig / len(sub):.1f}",
             })
     return pd.DataFrame(rows)
 
@@ -502,11 +543,11 @@ def joint_permutation_test(
             "exceeds_chance": p_binom < 0.05,
         })
 
-    # H2: between > within (significant = p < alpha)
-    h2 = df.dropna(subset=["h2_p"])
+    # H2: between > within (favourable = p < alpha and positive Δ)
+    h2 = h2_with_favourable(df, alpha=alpha)
     if not h2.empty:
         n = len(h2)
-        k = int((h2["h2_p"] < alpha).sum())
+        k = int(h2["h2_favourable"].sum())
         p_binom = float(sp_stats.binomtest(k, n, alpha, alternative="greater").pvalue)
         rows.append({
             "Hypothesis": "H2: Between > Within",
@@ -547,21 +588,26 @@ def generate_multiverse_figures(
     df: pd.DataFrame,
     fig_dir: Path | str,
     *,
-    dpi: int = 200,
+    dpi: int = 400,
 ) -> None:
     """Generate all multiverse visualizations."""
     fig_dir = Path(fig_dir)
     fig_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_spec_curve_h1(df, fig_dir / "mv_spec_curve_h1.png", dpi=dpi)
-    plot_spec_curve_h2(df, fig_dir / "mv_spec_curve_h2.png", dpi=dpi)
-    plot_spec_curve_h3(df, fig_dir / "mv_spec_curve_h3.png", dpi=dpi)
+    plot_spec_curve_h1(df, fig_dir / "mv_spec_curve_h1.pdf", dpi=dpi)
+    plot_spec_curve_h2(df, fig_dir / "mv_spec_curve_h2.pdf", dpi=dpi)
+    plot_spec_curve_h3(df, fig_dir / "mv_spec_curve_h3.pdf", dpi=dpi)
 
     plot_forest(
-        df, "h1_delta_auc", "H1 Marginal Influence (ΔAUC)", fig_dir / "mv_forest_h1.png", dpi=dpi,
+        df, "h1_delta_auc", "H1 Marginal Influence (ΔAUC)", fig_dir / "mv_forest_h1.pdf", dpi=dpi,
     )
     plot_forest(
-        df, "h2_delta_d", "H2 Marginal Influence (Δ|d|)", fig_dir / "mv_forest_h2.png", dpi=dpi,
+        h2_unique_pipelines(df),
+        "h2_delta_d",
+        "H2 Marginal Influence (Δ|d|)",
+        fig_dir / "mv_forest_h2.pdf",
+        dpi=dpi,
+        fork_cols=H2_FORK_COLS,
     )
 
     h3_df = df[df["reduction"] != "none"].copy()
@@ -570,7 +616,7 @@ def generate_multiverse_figures(
             h3_df,
             "h3_wilcoxon_p",
             "H3 Marginal Influence (Wilcoxon p)",
-            fig_dir / "mv_forest_h3.png",
+            fig_dir / "mv_forest_h3.pdf",
             dpi=dpi,
         )
 
@@ -581,7 +627,16 @@ def generate_multiverse_figures(
         print("\nRobustness summary:\n", rob.to_string(index=False))
 
     cond_rows = []
-    cond_rows.append(conditional_robustness(df, "H2", "h2_p", 0.05, "less"))
+    cond_rows.append(
+        conditional_robustness(
+            h2_with_favourable(df),
+            "H2",
+            "h2_favourable",
+            True,
+            "truthy",
+            fork_cols=H2_FORK_COLS,
+        )
+    )
     h3_sub = df[df["reduction"] != "none"]
     cond_rows.append(conditional_robustness(h3_sub, "H3", "h3_wilcoxon_p", 0.05, "less"))
     h1_sub = df[df["reduction"] != "none"]
@@ -603,7 +658,7 @@ def regenerate_multiverse_figures(
     results_csv: Path | str,
     *,
     figures_dir: Path | str | None = None,
-    dpi: int = 200,
+    dpi: int = 400,
 ) -> None:
     """Rebuild all multiverse figures and summary CSVs from a saved results table.
 

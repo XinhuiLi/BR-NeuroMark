@@ -14,7 +14,7 @@ from fbirn_experiment.component_selection import (
     select_n_components_fa,
     select_n_components_ica,
 )
-from fbirn_experiment.fnc import edge_domain_mask, edge_pair_mask_for_domains
+from fbirn_experiment.connectivity import edge_domain_mask, edge_pair_mask_for_domains
 
 # Literature-derived schizophrenia hypothesis domain pairs.
 # Labels follow the NeuroMark 2.2 "{domain_abbrev}-{subdomain_abbrev}" format
@@ -124,6 +124,43 @@ class H3Result:
     )
 
 
+def _validate_h3_inputs(
+    edges: np.ndarray,
+    y: np.ndarray | None,
+    icn_domain: np.ndarray,
+    ii: np.ndarray,
+    jj: np.ndarray,
+    decomposition: str,
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray, np.ndarray, np.ndarray]:
+    edges = np.asarray(edges, dtype=np.float64)
+    y_arr = None if y is None else np.asarray(y).astype(int).ravel()
+    icn_domain = np.asarray(icn_domain).ravel()
+    ii = np.asarray(ii, dtype=int).ravel()
+    jj = np.asarray(jj, dtype=int).ravel()
+
+    if edges.ndim != 2:
+        raise ValueError(f"edges must be 2D (subjects × edges); got shape {edges.shape}.")
+    if edges.shape[0] < 2 or edges.shape[1] < 1:
+        raise ValueError("edges must contain at least two subjects and one edge.")
+    if not np.all(np.isfinite(edges)):
+        raise ValueError("edges contains non-finite values.")
+    if y_arr is not None and y_arr.shape[0] != edges.shape[0]:
+        raise ValueError(f"y length ({y_arr.shape[0]}) must match edge rows ({edges.shape[0]}).")
+    if decomposition not in {"fa", "ica"}:
+        raise ValueError("decomposition must be 'fa' or 'ica'.")
+    if ii.shape != jj.shape:
+        raise ValueError("ii and jj must have the same shape.")
+    if ii.shape[0] != edges.shape[1]:
+        raise ValueError(
+            f"ii/jj length ({ii.shape[0]}) must match edge count ({edges.shape[1]})."
+        )
+    if icn_domain.ndim != 1 or icn_domain.shape[0] == 0:
+        raise ValueError("icn_domain must be a non-empty 1D array.")
+    if ii.size and (ii.min() < 0 or jj.min() < 0 or ii.max() >= len(icn_domain) or jj.max() >= len(icn_domain)):
+        raise ValueError("ii/jj contain indices outside icn_domain.")
+    return edges, y_arr, icn_domain, ii, jj
+
+
 def _resolve_domain_label(icn_domain: np.ndarray, label: str) -> str | None:
     """
     Match a domain–subdomain label (e.g. 'TN-DM', 'SC-ET', 'SM') against
@@ -164,11 +201,25 @@ def h3_factor_loadings_between_within(
 
     *decomposition*: ``"ica"`` (default) uses reconstruction-MSE grid selection
     when *use_bic_selection* is True; ``"fa"`` uses BIC/AIC grid selection.
+    The diagnostic labels ``y`` are accepted for pipeline API compatibility and
+    shape validation only; this function fits pooled unsupervised factors and
+    does not estimate diagnosis-specific loadings.
     """
+    edges, _y_checked, icn_domain, ii, jj = _validate_h3_inputs(
+        edges, y, icn_domain, ii, jj, decomposition
+    )
     scaler = StandardScaler()
     Xs = scaler.fit_transform(edges)
     n, p = Xs.shape
-    selection: dict[str, Any] = {"decomposition": decomposition}
+    selection: dict[str, Any] = {
+        "decomposition": decomposition,
+        "pooled_unsupervised_fit": True,
+        "y_used": False,
+        "loading_interpretation": (
+            "FA components or FastICA unmixing/projection weights on pooled scaled edges; "
+            "exploratory geometry, not diagnosis-specific loadings."
+        ),
+    }
 
     if decomposition == "fa":
         if use_bic_selection:
@@ -191,7 +242,7 @@ def h3_factor_loadings_between_within(
         )
         fa.fit(Xs)
         loadings = fa.components_
-    else:
+    elif decomposition == "ica":
         if use_bic_selection:
             k, diag = select_n_components_ica(
                 Xs,
@@ -215,8 +266,14 @@ def h3_factor_loadings_between_within(
         )
         ica.fit(Xs)
         loadings = ica.components_
+    else:
+        raise ValueError("decomposition must be 'fa' or 'ica'.")
 
     within, between = edge_domain_mask(icn_domain, ii, jj)
+    if not within.any() or not between.any():
+        raise ValueError(
+            "H3 requires at least one within-domain and one between-domain edge."
+        )
 
     # ── Per-factor between / within summary ──────────────────────────────
     rows = []

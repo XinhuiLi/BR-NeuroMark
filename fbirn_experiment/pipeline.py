@@ -15,7 +15,7 @@ from fbirn_experiment.confounds import (
     regress_confounds,
 )
 from fbirn_experiment.figures import generate_all_figures
-from fbirn_experiment.fnc import fnc_edges_from_tc
+from fbirn_experiment.connectivity import fnc_edges_from_tc
 from fbirn_experiment.h1_cv import (
     all_pairwise_auc_tests,
     compute_h1_stability_tests,
@@ -51,7 +51,7 @@ def run_experiment(
     k_max: int = 50,
     k_step: int = 5,
     fa_criterion: str = "bic",
-    h2_n_perm: int = 2000,
+    h2_n_perm: int = 500,
     h3_use_bic: bool = True,
     h3_decomposition: Literal["fa", "ica"] = "ica",
     h3_k_min: int = 5,
