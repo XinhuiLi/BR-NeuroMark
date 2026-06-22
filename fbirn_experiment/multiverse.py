@@ -55,6 +55,7 @@ from fbirn_experiment.h1_cv import FactorAnalysisTransform, FastICATransform
 from fbirn_experiment.h2_test import h2_domain_label_permutation_test
 
 log = logging.getLogger(__name__)
+MISSING_BATCH = "__missing__"
 
 ConfoundStrategy = Literal["none", "ols", "combat"]
 ReductionMethod = Literal["none", "fa", "ica", "pca", "nmf"]
@@ -402,7 +403,7 @@ def _run_spec_inner(
 
         cdf = load_confounds(confound_csv, confound_cols)
         site_col = "site" if "site" in cdf.columns else cdf.columns[0]
-        site_labels_inner = cdf[site_col].values
+        site_labels_inner = _normalize_batch_labels(cdf[site_col].values)
         covars = pd.DataFrame({"batch": site_labels_inner})
         result = neuroCombat(dat=edges.T, covars=covars, batch_col="batch")
         edges_combat: np.ndarray = result["data"].T
@@ -568,6 +569,16 @@ def _safe_predict_proba(model: Any, X: np.ndarray) -> np.ndarray:
     return expit(df)
 
 
+def _normalize_batch_labels(labels: Sequence[Any]) -> np.ndarray:
+    """Return stable string labels for ComBat batch handling."""
+    return (
+        pd.Series(labels, dtype="object")
+        .astype("string")
+        .fillna(MISSING_BATCH)
+        .to_numpy(dtype=str)
+    )
+
+
 def _combat_harmonize_cv(
     X_train: np.ndarray,
     X_test: np.ndarray,
@@ -581,6 +592,8 @@ def _combat_harmonize_cv(
     """
     from neuroCombat import neuroCombat  # noqa: PLC0415
 
+    site_train = _normalize_batch_labels(site_train)
+    site_test = _normalize_batch_labels(site_test)
     covars_tr = pd.DataFrame({"batch": site_train})
     result = neuroCombat(dat=X_train.T, covars=covars_tr, batch_col="batch")
     X_tr_out = result["data"].T
@@ -642,6 +655,30 @@ def _save_spec_json(spec_dir: Path, spec_id: int, row: dict[str, Any]) -> None:
         )
 
 
+def _spec_json_path(output_dir: Path, spec_dir: Path, spec_id: int) -> Path | None:
+    """Return the first existing checkpoint path for a spec, if any."""
+    name = f"{spec_id:04d}.json"
+    for path in (spec_dir / name, output_dir / name):
+        if path.exists():
+            return path
+    return None
+
+
+def _load_completed_spec_json(json_path: Path) -> dict[str, Any] | None:
+    """Load a checkpoint row only when it is valid JSON with no recorded error."""
+    try:
+        with open(json_path) as f:
+            saved = json.load(f)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(saved, dict):
+        return None
+    if saved.get("error"):
+        return None
+    return saved
+
+
 # ── Orchestrator ─────────────────────────────────────────────────────────
 
 
@@ -678,16 +715,13 @@ def run_multiverse(
     results: list[dict[str, Any]] = []
     completed_ids: set[int] = set()
     for spec in specs:
-        json_path = spec_dir / f"{spec.spec_id:04d}.json"
-        if json_path.exists():
-            try:
-                with open(json_path) as f:
-                    saved = json.load(f)
-                if not saved.get("error"):
-                    completed_ids.add(spec.spec_id)
-                    results.append(saved)
-            except (json.JSONDecodeError, KeyError):
-                pass
+        json_path = _spec_json_path(out, spec_dir, spec.spec_id)
+        if json_path is None:
+            continue
+        saved = _load_completed_spec_json(json_path)
+        if saved is not None:
+            completed_ids.add(spec.spec_id)
+            results.append(saved)
 
     pending = [s for s in specs if s.spec_id not in completed_ids]
     if completed_ids:
@@ -816,7 +850,7 @@ def _run_spec_with_precomputed_edges(
             from neuroCombat import neuroCombat  # noqa: PLC0415
 
             site_col = "site" if "site" in cdf.columns else list(cdf.columns)[0]
-            site_labels = cdf[site_col].values
+            site_labels = _normalize_batch_labels(cdf[site_col].values)
             covars = pd.DataFrame({"batch": site_labels})
             result = neuroCombat(dat=edges.T, covars=covars, batch_col="batch")
             edges_base: np.ndarray = result["data"].T

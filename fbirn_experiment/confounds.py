@@ -10,6 +10,7 @@ import pandas as pd
 
 
 DEFAULT_CONFOUND_COLS = ("age", "sex", "race", "site", "hm")
+MISSING_CATEGORY = "__missing__"
 
 
 def load_confounds(
@@ -50,6 +51,7 @@ def build_design_matrix(
             parts.append(pd.DataFrame({col: vals}))
             col_names.append(col)
         else:
+            s = s.astype("string").fillna(MISSING_CATEGORY)
             dummies = pd.get_dummies(s, prefix=col, drop_first=True, dtype=np.float64)
             parts.append(dummies)
             col_names.extend(dummies.columns.tolist())
