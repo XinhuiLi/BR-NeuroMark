@@ -579,6 +579,38 @@ def _normalize_batch_labels(labels: Sequence[Any]) -> np.ndarray:
     )
 
 
+def _feature_column(arr: Any, n_features: int, name: str) -> np.ndarray:
+    """Coerce a ComBat estimate to a feature-wise column vector."""
+    a = np.asarray(arr, dtype=np.float64)
+    if a.ndim == 1:
+        if a.shape[0] != n_features:
+            raise ValueError(f"{name} has length {a.shape[0]}, expected {n_features}.")
+        return a[:, np.newaxis]
+    if a.ndim != 2:
+        raise ValueError(f"{name} must be 1D or 2D; got shape {a.shape}.")
+    if a.shape[0] == n_features:
+        return np.mean(a, axis=1, keepdims=True)
+    if a.shape[1] == n_features:
+        return np.mean(a, axis=0, keepdims=True).T
+    raise ValueError(f"{name} shape {a.shape} is incompatible with {n_features} features.")
+
+
+def _batch_feature_matrix(arr: Any, n_features: int, name: str) -> np.ndarray:
+    """Coerce ComBat batch parameters to shape (n_batches, n_features)."""
+    a = np.asarray(arr, dtype=np.float64)
+    if a.ndim == 1:
+        if a.shape[0] != n_features:
+            raise ValueError(f"{name} has length {a.shape[0]}, expected {n_features}.")
+        return a[np.newaxis, :]
+    if a.ndim != 2:
+        raise ValueError(f"{name} must be 1D or 2D; got shape {a.shape}.")
+    if a.shape[1] == n_features:
+        return a
+    if a.shape[0] == n_features:
+        return a.T
+    raise ValueError(f"{name} shape {a.shape} is incompatible with {n_features} features.")
+
+
 def _combat_harmonize_cv(
     X_train: np.ndarray,
     X_test: np.ndarray,
@@ -599,15 +631,11 @@ def _combat_harmonize_cv(
     X_tr_out = result["data"].T
     est = result["estimates"]
 
-    stand_mean = np.asarray(est["stand.mean"])
-    var_pooled = np.asarray(est["var.pooled"])
-    gamma_star = np.asarray(est["gamma.star"])
-    delta_star = np.asarray(est["delta.star"])
-
-    if stand_mean.ndim == 1:
-        stand_mean = stand_mean[:, np.newaxis]
-    if var_pooled.ndim == 1:
-        var_pooled = var_pooled[:, np.newaxis]
+    n_features = X_train.shape[1]
+    stand_mean = _feature_column(est["stand.mean"], n_features, "stand.mean")
+    var_pooled = _feature_column(est["var.pooled"], n_features, "var.pooled")
+    gamma_star = _batch_feature_matrix(est["gamma.star"], n_features, "gamma.star")
+    delta_star = _batch_feature_matrix(est["delta.star"], n_features, "delta.star")
 
     unique_batches = list(dict.fromkeys(site_train))
     batch_to_idx = {b: i for i, b in enumerate(unique_batches)}
@@ -619,7 +647,7 @@ def _combat_harmonize_cv(
     for j in range(X_test.shape[0]):
         b_idx = batch_to_idx.get(site_test[j])
         if b_idx is not None:
-            out[:, j] = (s[:, j] - gamma_star[b_idx]) / np.sqrt(delta_star[b_idx])
+            out[:, j] = (s[:, j] - gamma_star[b_idx, :]) / np.sqrt(delta_star[b_idx, :])
         else:
             out[:, j] = s[:, j]
 
