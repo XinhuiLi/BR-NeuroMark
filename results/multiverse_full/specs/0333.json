@@ -5,14 +5,14 @@
   "reduction": "fa",
   "classifier": "svm_linear",
   "domain_granularity": "domain_7",
-  "h1_auc_edges": null,
-  "h1_auc_latent": null,
-  "h1_delta_auc": null,
-  "h2_delta_d": null,
-  "h2_p": null,
-  "h3_wilcoxon_p": null,
-  "h3_n_factors": 0,
+  "h1_auc_edges": 0.7569944944944945,
+  "h1_auc_latent": 0.7511094427761095,
+  "h1_delta_auc": -0.005885051718385048,
+  "h2_delta_d": -0.022594408393088378,
+  "h2_p": 1.0,
+  "h3_wilcoxon_p": 0.0625,
+  "h3_n_factors": 5,
   "h3_between_gt_within": 0,
-  "duration_s": 0.20811200141906738,
-  "error": "No module named 'neuroCombat'"
+  "duration_s": 203.0183229446411,
+  "error": ""
 }

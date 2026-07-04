@@ -9,10 +9,10 @@
   "h1_auc_latent": null,
   "h1_delta_auc": null,
   "h2_delta_d": -0.029143036485674956,
-  "h2_p": 0.001996007984031936,
+  "h2_p": 1.0,
   "h3_wilcoxon_p": null,
   "h3_n_factors": 0,
   "h3_between_gt_within": 0,
-  "duration_s": 22.165525436401367,
+  "duration_s": 28.0621817111969,
   "error": ""
 }

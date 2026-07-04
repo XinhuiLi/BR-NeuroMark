@@ -1,22 +1,22 @@
 # Schizophrenia Functional Network Connectivity - Multiverse Analysis
 
-Multiverse / specification-curve analysis (Steegen et al., 2016; Simonsohn et al., 2020) varies analytic choices across **five forks** (connectivity, confound, reduction, classifier, domain) and tests robustness of three hypotheses. Operational definitions and **what the full run supports** are summarized below; counts come from `results/multiverse_full/multiverse_results.csv` for the **320**-specification grid.
+Multiverse / specification-curve analysis (Steegen et al., 2016; Simonsohn et al., 2020) varies analytic choices across **five forks** (connectivity, confound, reduction, classifier, domain) and tests robustness of three hypotheses. Operational definitions and **what the full run supports** are summarized below; counts come from `results/multiverse_full/multiverse_results.csv` for the **480**-specification grid.
 
 ### Hypotheses (what each test measures)
 
-- **H1 — Latent vs edge classification.** For each specification, the same FC **edge features** support two nested-CV pipelines: **all edges** vs **edges projected to *k* latent components** (FA, ICA, PCA, or NMF; *k* chosen in-fold). The multiverse outcome is **ΔAUC = mean outer-fold ROC-AUC(latent) − mean outer-fold ROC-AUC(edges)**. A specification counts as **favourable** if **ΔAUC > 0** (latent strictly better on average). Rows with `reduction = none` have no latent arm and are excluded from H1 summaries (**256** evaluable specs in the saved full run).
+- **H1 — Latent vs edge classification.** For each specification, the same FC **edge features** support two nested-CV pipelines: **all edges** vs **edges projected to *k* latent components** (FA, ICA, PCA, or NMF; *k* chosen in-fold). The multiverse outcome is **ΔAUC = mean outer-fold ROC-AUC(latent) − mean outer-fold ROC-AUC(edges)**. A specification counts as **favourable** if **ΔAUC > 0** (latent strictly better on average). Rows with `reduction = none` have no latent arm and are excluded from H1 summaries (**384** evaluable specs in the saved full run).
 
-- **H2 — Between-domain vs within-domain effect sizes.** Per edge, **Cohen’s *d*** for SCZ vs HC is computed. The statistic is **Δ mean|*d*| = mean(|*d*| on between-domain edges) − mean(|*d*| on within-domain edges)** (domain masks follow the chosen **D5** granularity). A **label permutation** of ICN domain assignments yields a **two-sided *p***. A spec is **favourable** if ***p* < 0.05**. H2 uses the (possibly confound-adjusted) edge matrix only; **all 320** specifications with finite `h2_p` enter the summary.
+- **H2 — Between-domain vs within-domain effect sizes.** Per edge, **Cohen’s *d*** for SCZ vs HC is computed. The statistic is **Δ mean|*d*| = mean(|*d*| on between-domain edges) − mean(|*d*| on within-domain edges)** (domain masks follow the chosen **D5** granularity). A **label permutation** of ICN domain assignments yields a directional permutation *p*. A spec is **favourable** if ***p* < 0.05 and Δ mean|*d*| > 0**. H2 uses the (possibly confound-adjusted) edge matrix only, so summaries collapse duplicate classifier/reduction rows to **24** unique D1×D2×D5 pipelines.
 
-- **H3 — Between- vs within-domain loading mass.** After fitting the chosen reducer on scaled edges, each component’s **mean |loading|** is compared **between-domain vs within-domain**. Across components, paired differences are tested with a **Wilcoxon signed-rank** on those differences (see `fbirn_experiment/multiverse.py`). A spec is **favourable** if **Wilcoxon *p* < 0.05**. Like H1, H3 requires a latent decomposition (**256** evaluable specs with `reduction ≠ none`).
+- **H3 — Between- vs within-domain loading mass.** After fitting the chosen reducer on scaled edges, each component’s **mean |loading|** is compared **between-domain vs within-domain**. Across components, paired differences are tested with a **Wilcoxon signed-rank** on those differences (see `fbirn_experiment/multiverse.py`). A spec is **favourable** only if **Wilcoxon *p* < 0.05 and a strict majority of components have between-domain loading mass greater than within-domain loading mass**. Like H1, H3 requires a latent decomposition (**384** evaluable specs with `reduction ≠ none`).
 
 ### Key takeaways from `results/multiverse_full`
 
 | Hypothesis | Supported in the multiverse sense? | Typical “winning” settings (from `mv_conditional_robustness.csv`) |
 |------------|-------------------------------------|-------------------------------------------------------------------|
-| **H1** | **No** as a default claim: only **18.0%** of latent specs have ΔAUC > 0; **median ΔAUC = −0.0377** (edges often win on average). The joint binomial test still flags **more** positive-Δ specs than a strict global null—so some analytic paths favour latent, but they are a **minority**. | **ICA** reduction (**47%** favourable within ICA rows) vs **FA/PCA** (~3–4%). **OLS** confounds (**23.6%**) vs **none** (**10.7%**). **Partial correlation** connectivity (**28.1%**) vs **mutual information** (**6.2%**). Domain granularity makes little difference (~18% for both D5 levels). |
-| **H2** | **Yes**, very strongly: **93.8%** of specs have permutation ***p* < 0.05**; **median Δ mean(d) = 0.0079** (> 0). | Nearly all fork slices are majority favourable; **100%** under **Pearson (Fisher z)**, **Spearman**, **partial correlation**, **OLS** confounds, and **14 subdomains**. Relatively weaker (still majority): **mutual information** (**75%**), **`confound = none`** (**86.1%**), **7 domains** (**87.5%**). |
-| **H3** | **Partially**: **55.5%** of latent specs have Wilcoxon ***p* < 0.05**; **median *p* = 0.033** (often significant but not universal). | **ICA** (**77.8%** favourable) stands out vs **PCA** (**35.7%**) or **NMF** (**50%**). **Pearson** (**66.7%**) and **Spearman** (**67.5%**) beat **partial correlation** (**37.5%**) and **mutual information** (**50%**). **14 subdomains** is not uniformly better than **7 domains** here (**50%** vs **60.9%**). |
+| **H1** | **No** as a default claim: only **18.8%** of latent specs have ΔAUC > 0; **median ΔAUC = −0.0319** (edges often win on average). The joint binomial test still flags **more** positive-Δ specs than a strict global null, so some analytic paths favour latent, but they are a **minority**. | **ICA** reduction (**54.2%** favourable within ICA rows) vs **FA/PCA** (**8.3%**/**2.1%**). **ComBat** confounds (**26.6%**) vs **none** (**10.9%**). **Partial correlation** connectivity (**29.2%**) vs **mutual information** (**8.3%**). Domain granularity makes little difference (**18.8%** for both D5 levels). |
+| **H2** | **Mixed and estimator-dependent**: **50.0%** of the 24 unique H2 pipelines are favourable; **median Δ mean\|d\| = 0.0079** (> 0). | **Pearson (Fisher z)** and **Spearman** are **100%** favourable; **partial correlation** and **mutual information** are **0%** favourable. Confound strategy and domain granularity are each **50%** favourable. |
+| **H3** | **Limited direction-aware support**: **26.0%** of latent specs are significant and have a majority of components with between > within loading mass; **median *p* = 0.0543**. | **Factor analysis** (**45.8%**) and **PCA** (**33.3%**) are more often favourable than **ICA/NMF** (**12.5%** each) under this direction-aware definition. **Spearman** (**41.7%**) and **Pearson** (**37.5%**) exceed **partial correlation** (**25.0%**) and **mutual information** (**0%**). |
 
 **Joint specification-count test** (`figures/mv_joint_permutation_test.csv`): for α = 0.05, the number of favourable specs **exceeds** the binomial null for **all three** hypotheses (including H1), which is consistent with **some** sensitivity of the global null to multiple testing structure—not with blanket latent superiority for H1.
 
@@ -24,22 +24,22 @@ Multiverse / specification-curve analysis (Steegen et al., 2016; Simonsohn et al
 
 ## Full multiverse in this repo (`results/multiverse_full/`)
 
-A **full factorial** run is saved under `results/multiverse_full/`: **320** specifications in `multiverse_results.csv`, from the grid **4×2×5×4×2** (confound **without** ComBat: **`none`** and **`ols`** only).
+A **full factorial** run is saved under `results/multiverse_full/`: **480** specifications in `multiverse_results.csv`, from the grid **4×3×5×4×2** (confound strategies **`none`**, **`ols`**, and **`combat`**).
 
-Tables and figures use rows with finite outcomes (e.g. **320** specs with valid H2; **256** with latent reduction for H1/H3, i.e. `reduction ≠ none`).
+Tables and figures use rows with finite outcomes. H2 is collapsed to **24** unique D1×D2×D5 pipelines because classifier and reduction do not affect the edge-level H2 statistic; H1/H3 have **384** latent-reduction rows, i.e. `reduction ≠ none`.
 
 ### Fork grid (full default)
 
 | Fork | Levels |
 |------|--------|
 | **D1** Connectivity | `pearson_z`, `spearman`, `partial_corr`, `mutual_info` |
-| **D2** Confound | `none`, `ols` |
+| **D2** Confound | `none`, `ols`, `combat` |
 | **D3** Reduction | `none`, `fa`, `ica`, `pca`, `nmf` |
 | **D4** Classifier | `elasticnet`, `logistic_l2`, `svm_linear`, `rf` |
 | **D5** Domain | `domain_7`, `subdomain_14` |
-| **Count** | **320** = 4×2×5×4×2 |
+| **Count** | **480** = 4×3×5×4×2 |
 
-Full run (320-spec grid): `python -m fbirn_experiment.cli multiverse --out results/multiverse_full --confound-strategies none ols --n-jobs -1` (completed specs are skipped via `specs/*.json` checkpoints).
+Full run (480-spec grid): `python -m fbirn_experiment.cli multiverse --out results/multiverse_full --confound-strategies none ols combat --n-jobs -1` (completed specs are skipped via `specs/*.json` checkpoints).
 
 ### Robustness summary (full grid)
 
@@ -47,9 +47,9 @@ Source: `results/multiverse_full/figures/mv_robustness_summary.csv` (same logic 
 
 | Hypothesis | Specs (evaluable) | Favourable | % | Median effect |
 |------------|-------------------|------------|---|---------------|
-| H1: Latent > edges | 256 | 46 | 18.0% | −0.0377 |
-| H2: Between > within | 320 | 300 | **93.8%** | 0.0079 |
-| H3: Between loading advantage | 256 | 142 | **55.5%** | 0.0330 |
+| H1: Latent > edges | 384 | 72 | 18.8% | −0.0319 |
+| H2: Between > within | 24 | 12 | 50.0% | 0.0079 |
+| H3: Between loading advantage | 384 | 100 | 26.0% | 0.0543 median *p* |
 
 Joint binomial test (`results/multiverse_full/figures/mv_joint_permutation_test.csv`): for each hypothesis the count of favourable specs exceeds the α = 0.05 binomial null (*n* as in the table). Interpretation of H1 vs that test is spelled out in **Key takeaways** above.
 
@@ -137,8 +137,8 @@ python -m fbirn_experiment.cli regen-h1-latent-figs --run-dir results/fbirn_icn_
 # Mini (48 specs)
 python -m fbirn_experiment.cli multiverse --mini --out results/multiverse
 
-# Full factorial (320 specs: none + ols); parallel workers; resume via specs/*.json
-python -m fbirn_experiment.cli multiverse --out results/multiverse_full --confound-strategies none ols --n-jobs -1
+# Full factorial (480 specs: none + ols + combat); parallel workers; resume via specs/*.json
+python -m fbirn_experiment.cli multiverse --out results/multiverse_full --confound-strategies none ols combat --n-jobs -1
 
 # Custom slice
 python -m fbirn_experiment.cli multiverse \
@@ -163,9 +163,10 @@ Multiverse flags: `--out`, `--no-figures`, `--synthetic`, `--h2-perm`, `--n-jobs
 ## Implementation notes
 
 - **Checkpoint resume:** completed `specs/{spec_id:04d}.json` are skipped.
+- **Run provenance:** `run_manifest.json` records array shapes, class/domain counts, confound file hash, fork levels, seeds/CV settings, package versions, and git state for new multiverse runs.
 - **Parallelism:** `joblib` + `n_jobs`.
 - **Connectivity:** Pearson / Spearman / partial correlation (Ledoit–Wolf) / mutual information — see `connectivity.py`.
-- **ComBat:** optional third confound level in `multiverse.py` (`--confound-strategies combat`) if `neuroCombat` is installed; not part of the **320**-spec README grid above.
+- **ComBat:** optional confound level in `multiverse.py` (`--confound-strategies combat`) if `neuroCombat` is installed; included in the saved **480**-spec grid above.
 - **Multiverse figure labels:** human-readable fork levels (e.g. “Mutual information”) via `multiverse_figures.format_fork_level`.
 
 ---

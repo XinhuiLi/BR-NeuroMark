@@ -5,11 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import numpy as np
 import pandas as pd
-from scipy import stats as sp_stats
+
+try:
+    from scipy import stats as sp_stats
+except ModuleNotFoundError:  # pragma: no cover - depends on local environment
+    sp_stats = None
+
+try:  # Plotting is optional for CSV-only summary regeneration.
+    import matplotlib.colors as mcolors
+    import matplotlib.pyplot as plt
+except ModuleNotFoundError:  # pragma: no cover - depends on local environment
+    mcolors = None
+    plt = None
 
 
 FORK_COLS = ["connectivity", "confound", "reduction", "classifier", "domain_granularity"]
@@ -58,6 +67,7 @@ _OUTCOME_COL_DISPLAY: dict[str, str] = {
     "h1_delta_auc": "ΔAUC (Latent - Edges)",
     "h2_delta_d": "Δ Mean |Cohen's d|",
     "h3_wilcoxon_p": "Wilcoxon p-value",
+    "h3_between_gt_within": "# Components Between > Within",
 }
 
 
@@ -84,14 +94,23 @@ _FONT_LEGEND = 14
 
 # tab20c: 20 colors as 5 groups × 4 shades — same hue family per domain (fork),
 # distinct shades for each option within the domain.
-_TAB20C = plt.cm.tab20c
+_TAB20C = None if plt is None else plt.cm.tab20c
 _N_TAB20C = 20
 _N_FORKS = len(FORK_COLS)
 _SLOTS_PER_DOMAIN = _N_TAB20C // _N_FORKS  # 4
 
 
+def _require_matplotlib() -> None:
+    if plt is None or mcolors is None:
+        raise RuntimeError(
+            "matplotlib is required to draw multiverse figures. "
+            "Install matplotlib or use the summary-table helpers only."
+        )
+
+
 def _tab20c_domain_level_color(fork_idx: int, level_idx: int) -> tuple:
     """Pick a tab20c color: domain ``fork_idx`` (0–4), option index within domain."""
+    _require_matplotlib()
     slot = fork_idx * _SLOTS_PER_DOMAIN + min(int(level_idx), _SLOTS_PER_DOMAIN - 1)
     slot = min(max(slot, 0), _N_TAB20C - 1)
     return _TAB20C(slot / (_N_TAB20C - 1))
@@ -142,6 +161,47 @@ def h2_with_favourable(df: pd.DataFrame, alpha: float = 0.05) -> pd.DataFrame:
     if not h2.empty:
         h2["h2_favourable"] = h2_favourable_mask(h2, alpha)
     return h2
+
+
+def h3_favourable_mask(df: pd.DataFrame, alpha: float = 0.05) -> pd.Series:
+    """H3 is favourable only when significant and directionally between > within.
+
+    ``h3_between_gt_within`` stores how many fitted components had greater
+    between-domain than within-domain loading mass. A significant Wilcoxon test
+    alone can indicate either direction, so require a strict component majority.
+    """
+    required = {"h3_wilcoxon_p", "h3_between_gt_within", "h3_n_factors"}
+    missing = required - set(df.columns)
+    if missing:
+        raise KeyError(f"H3 favourable mask requires columns: {sorted(missing)}")
+    return (
+        (df["h3_wilcoxon_p"] < alpha)
+        & (df["h3_between_gt_within"] > (df["h3_n_factors"] / 2.0))
+    )
+
+
+def h3_with_favourable(df: pd.DataFrame, alpha: float = 0.05) -> pd.DataFrame:
+    """Return latent-reduction H3 rows with a direction-aware favourable flag."""
+    h3 = df.dropna(subset=["h3_wilcoxon_p", "h3_between_gt_within", "h3_n_factors"]).copy()
+    if "reduction" in h3.columns:
+        h3 = h3[h3["reduction"] != "none"].copy()
+    if not h3.empty:
+        h3["h3_favourable"] = h3_favourable_mask(h3, alpha)
+    return h3
+
+
+def _binomtest_greater(k: int, n: int, p: float) -> float:
+    """Exact P[X >= k] for Binomial(n, p), using scipy when available."""
+    if sp_stats is not None:
+        return float(sp_stats.binomtest(k, n, p, alternative="greater").pvalue)
+    import math
+
+    return float(
+        sum(
+            math.comb(n, i) * (p ** i) * ((1.0 - p) ** (n - i))
+            for i in range(k, n + 1)
+        )
+    )
 
 
 def _tile_ax(
@@ -275,8 +335,7 @@ def plot_spec_curve_h2(df: pd.DataFrame, out_path: Path, *, dpi: int = 400) -> N
 
 def plot_spec_curve_h3(df: pd.DataFrame, out_path: Path, *, dpi: int = 400) -> None:
     """Specification curve for H3: Wilcoxon p-value for between > within loadings."""
-    dfc = df.dropna(subset=["h3_wilcoxon_p"]).copy()
-    dfc = dfc[dfc["reduction"] != "none"].copy()
+    dfc = h3_with_favourable(df)
     if dfc.empty:
         return
     dfc = dfc.sort_values("h3_wilcoxon_p").reset_index(drop=True)
@@ -287,11 +346,11 @@ def plot_spec_curve_h3(df: pd.DataFrame, out_path: Path, *, dpi: int = 400) -> N
     )
     xs = np.arange(len(dfc))
 
-    colors = np.where(dfc["h3_wilcoxon_p"].values < 0.05, _COLOR_GREEN, _COLOR_RED)
+    colors = np.where(dfc["h3_favourable"].values, _COLOR_GREEN, _COLOR_RED)
     ax_p.bar(xs, -np.log10(dfc["h3_wilcoxon_p"].values), color=colors, alpha=0.85, width=1.0, linewidth=0)
     ax_p.axhline(-np.log10(0.05), color="red", ls="--", lw=1.0, label="p = 0.05")
     ax_p.set_ylabel("−log$_{10}$(p)", fontsize=_FONT_LABEL)
-    ax_p.set_title("H3 Specification Curve: Factor Loading Structure", fontsize=_FONT_TITLE)
+    ax_p.set_title("H3 Specification Curve: Between-Domain Loading Advantage", fontsize=_FONT_TITLE)
     ax_p.legend(fontsize=_FONT_LEGEND, loc="upper right")
     ax_p.tick_params(labelsize=_FONT_TICK)
 
@@ -451,17 +510,16 @@ def robustness_table(df: pd.DataFrame) -> pd.DataFrame:
         })
 
     # H3
-    h3_df = df.dropna(subset=["h3_wilcoxon_p"])
-    h3_df = h3_df[h3_df["reduction"] != "none"]
+    h3_df = h3_with_favourable(df)
     if not h3_df.empty:
         n_total = len(h3_df)
-        n_sig = int((h3_df["h3_wilcoxon_p"] < 0.05).sum())
+        n_fav = int(h3_df["h3_favourable"].sum())
         rows.append({
             "Hypothesis": "H3: Between loading advantage",
             "Total specs": n_total,
-            "# Favourable": n_sig,
-            "% Robust": f"{100 * n_sig / n_total:.1f}",
-            "Median effect": f"{h3_df['h3_wilcoxon_p'].median():.4f}",
+            "# Favourable": n_fav,
+            "% Robust": f"{100 * n_fav / n_total:.1f}",
+            "Median effect": f"{h3_df['h3_wilcoxon_p'].median():.4f} median p",
         })
 
     return pd.DataFrame(rows)
@@ -531,7 +589,7 @@ def joint_permutation_test(
     if not h1.empty:
         n = len(h1)
         k = int((h1["h1_delta_auc"] > 0).sum())
-        p_binom = float(sp_stats.binomtest(k, n, alpha, alternative="greater").pvalue)
+        p_binom = _binomtest_greater(k, n, alpha)
         rows.append({
             "Hypothesis": "H1: Latent > Edges",
             "n_specs": n,
@@ -548,7 +606,7 @@ def joint_permutation_test(
     if not h2.empty:
         n = len(h2)
         k = int(h2["h2_favourable"].sum())
-        p_binom = float(sp_stats.binomtest(k, n, alpha, alternative="greater").pvalue)
+        p_binom = _binomtest_greater(k, n, alpha)
         rows.append({
             "Hypothesis": "H2: Between > Within",
             "n_specs": n,
@@ -560,13 +618,12 @@ def joint_permutation_test(
             "exceeds_chance": p_binom < 0.05,
         })
 
-    # H3: between loading advantage (significant = p < alpha)
-    h3 = df.dropna(subset=["h3_wilcoxon_p"])
-    h3 = h3[h3["reduction"] != "none"]
+    # H3: between loading advantage (significant and directionally positive)
+    h3 = h3_with_favourable(df, alpha=alpha)
     if not h3.empty:
         n = len(h3)
-        k = int((h3["h3_wilcoxon_p"] < alpha).sum())
-        p_binom = float(sp_stats.binomtest(k, n, alpha, alternative="greater").pvalue)
+        k = int(h3["h3_favourable"].sum())
+        p_binom = _binomtest_greater(k, n, alpha)
         rows.append({
             "Hypothesis": "H3: Between loading advantage",
             "n_specs": n,
@@ -610,12 +667,12 @@ def generate_multiverse_figures(
         fork_cols=H2_FORK_COLS,
     )
 
-    h3_df = df[df["reduction"] != "none"].copy()
+    h3_df = h3_with_favourable(df)
     if not h3_df.empty:
         plot_forest(
             h3_df,
-            "h3_wilcoxon_p",
-            "H3 Marginal Influence (Wilcoxon p)",
+            "h3_between_gt_within",
+            "H3 Marginal Influence (# Components Between > Within)",
             fig_dir / "mv_forest_h3.pdf",
             dpi=dpi,
         )
@@ -637,8 +694,10 @@ def generate_multiverse_figures(
             fork_cols=H2_FORK_COLS,
         )
     )
-    h3_sub = df[df["reduction"] != "none"]
-    cond_rows.append(conditional_robustness(h3_sub, "H3", "h3_wilcoxon_p", 0.05, "less"))
+    h3_sub = h3_with_favourable(df)
+    cond_rows.append(
+        conditional_robustness(h3_sub, "H3", "h3_favourable", True, "truthy")
+    )
     h1_sub = df[df["reduction"] != "none"]
     cond_rows.append(conditional_robustness(h1_sub, "H1", "h1_delta_auc", 0.0, "greater"))
     cond = pd.concat([r for r in cond_rows if not r.empty], ignore_index=True)

@@ -5,6 +5,11 @@ from __future__ import annotations
 import itertools
 import json
 import logging
+import hashlib
+import importlib.metadata
+import platform
+import subprocess
+import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -683,6 +688,126 @@ def _save_spec_json(spec_dir: Path, spec_id: int, row: dict[str, Any]) -> None:
         )
 
 
+def _sha256_file(path: Path) -> str | None:
+    """Return a SHA256 digest for small provenance manifests."""
+    if not path.is_file():
+        return None
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _package_version(package: str) -> str | None:
+    try:
+        return importlib.metadata.version(package)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def _git_metadata() -> dict[str, Any]:
+    root = Path(__file__).resolve().parent.parent
+
+    def _git(args: list[str]) -> str | None:
+        try:
+            out = subprocess.check_output(
+                ["git", *args],
+                cwd=root,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+        except Exception:
+            return None
+        return out.strip()
+
+    status = _git(["status", "--short"])
+    return {
+        "commit": _git(["rev-parse", "HEAD"]),
+        "branch": _git(["rev-parse", "--abbrev-ref", "HEAD"]),
+        "dirty": bool(status),
+        "status_short": status,
+    }
+
+
+def _write_run_manifest(
+    out: Path,
+    *,
+    time_courses: np.ndarray,
+    y: np.ndarray,
+    icn_domain_14: np.ndarray,
+    specs: list[MultispecConfig],
+    confound_csv: Path | str | None,
+    confound_cols: Sequence[str],
+    outer_splits: int,
+    inner_splits: int,
+    k_min: int,
+    k_max: int,
+    k_step: int,
+    h2_n_perm: int,
+    random_state: int,
+    n_jobs: int,
+) -> None:
+    """Write lightweight run-level provenance for reproducibility."""
+    y_arr = np.asarray(y).astype(int)
+    classes, counts = np.unique(y_arr, return_counts=True)
+    confound_path = Path(confound_csv) if confound_csv is not None else None
+    manifest = {
+        "created_at_unix": time.time(),
+        "python": {
+            "executable": sys.executable,
+            "version": sys.version,
+            "platform": platform.platform(),
+        },
+        "packages": {
+            name: _package_version(name)
+            for name in (
+                "numpy",
+                "pandas",
+                "scipy",
+                "scikit-learn",
+                "joblib",
+                "neuroCombat",
+            )
+        },
+        "git": _git_metadata(),
+        "data": {
+            "time_courses_shape": list(time_courses.shape),
+            "labels_shape": list(y_arr.shape),
+            "class_counts": {
+                str(int(k)): int(v) for k, v in zip(classes, counts)
+            },
+            "icn_domain_shape": list(np.asarray(icn_domain_14).shape),
+            "icn_domain_unique": int(len(np.unique(icn_domain_14))),
+            "confound_csv": str(confound_path) if confound_path is not None else None,
+            "confound_csv_sha256": (
+                _sha256_file(confound_path) if confound_path is not None else None
+            ),
+            "confound_cols": list(confound_cols),
+        },
+        "parameters": {
+            "outer_splits": outer_splits,
+            "inner_splits": inner_splits,
+            "k_min": k_min,
+            "k_max": k_max,
+            "k_step": k_step,
+            "h2_n_perm": h2_n_perm,
+            "random_state": random_state,
+            "n_jobs": n_jobs,
+        },
+        "multiverse": {
+            "n_specs": len(specs),
+            "connectivity": sorted({s.connectivity for s in specs}),
+            "confound": sorted({s.confound for s in specs}),
+            "reduction": sorted({s.reduction for s in specs}),
+            "classifier": sorted({s.classifier for s in specs}),
+            "domain_granularity": sorted({s.domain_granularity for s in specs}),
+        },
+    }
+    with open(out / "run_manifest.json", "w") as f:
+        json.dump(manifest, f, indent=2)
+
+
 def _spec_json_path(output_dir: Path, spec_dir: Path, spec_id: int) -> Path | None:
     """Return the first existing checkpoint path for a spec, if any."""
     name = f"{spec_id:04d}.json"
@@ -738,6 +863,23 @@ def run_multiverse(
     out.mkdir(parents=True, exist_ok=True)
     spec_dir = out / "specs"
     spec_dir.mkdir(exist_ok=True)
+    _write_run_manifest(
+        out,
+        time_courses=time_courses,
+        y=y,
+        icn_domain_14=icn_domain_14,
+        specs=specs,
+        confound_csv=confound_csv,
+        confound_cols=confound_cols,
+        outer_splits=outer_splits,
+        inner_splits=inner_splits,
+        k_min=k_min,
+        k_max=k_max,
+        k_step=k_step,
+        h2_n_perm=h2_n_perm,
+        random_state=random_state,
+        n_jobs=n_jobs,
+    )
 
     # ── Checkpoint resume ────────────────────────────────────────────────
     results: list[dict[str, Any]] = []

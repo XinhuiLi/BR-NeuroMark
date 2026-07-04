@@ -8,11 +8,11 @@
   "h1_auc_edges": 0.8176551551551551,
   "h1_auc_latent": null,
   "h1_delta_auc": null,
-  "h2_delta_d": -0.022843270417325617,
-  "h2_p": 0.001996007984031936,
+  "h2_delta_d": -0.02284327041732516,
+  "h2_p": 1.0,
   "h3_wilcoxon_p": null,
   "h3_n_factors": 0,
   "h3_between_gt_within": 0,
-  "duration_s": 13.087130069732666,
+  "duration_s": 16.89854621887207,
   "error": ""
 }

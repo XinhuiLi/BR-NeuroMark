@@ -6,13 +6,13 @@
   "classifier": "elasticnet",
   "domain_granularity": "domain_7",
   "h1_auc_edges": 0.7277277277277276,
-  "h1_auc_latent": 0.8324532866199533,
-  "h1_delta_auc": 0.10472555889222568,
-  "h2_delta_d": -0.022843270417325617,
-  "h2_p": 0.001996007984031936,
+  "h1_auc_latent": 0.8323031364698033,
+  "h1_delta_auc": 0.1045754087420756,
+  "h2_delta_d": -0.02284327041732516,
+  "h2_p": 1.0,
   "h3_wilcoxon_p": 0.029727315082014982,
   "h3_n_factors": 50,
   "h3_between_gt_within": 33,
-  "duration_s": 135.13097476959229,
+  "duration_s": 305.2399802207947,
   "error": ""
 }
