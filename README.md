@@ -2,7 +2,7 @@
 
 Multiverse / specification-curve analysis (Steegen et al., 2016; Simonsohn et al., 2020) varies analytic choices across **five forks** (connectivity, confound, reduction, classifier, domain) and tests robustness of three hypotheses. Operational definitions and **what the full run supports** are summarized below; counts come from `results/multiverse_full/multiverse_results.csv` for the **480**-specification grid.
 
-### Hypotheses (what each test measures)
+### Hypotheses
 
 - **H1 — Latent vs edge classification.** For each specification, the same FC **edge features** support two nested-CV pipelines: **all edges** vs **edges projected to *k* latent components** (FA, ICA, PCA, or NMF; *k* chosen in-fold). The multiverse outcome is **ΔAUC = mean outer-fold ROC-AUC(latent) − mean outer-fold ROC-AUC(edges)**. A specification counts as **favourable** if **ΔAUC > 0** (latent strictly better on average). Rows with `reduction = none` have no latent arm and are excluded from H1 summaries (**384** evaluable specs in the saved full run).
 
@@ -10,7 +10,7 @@ Multiverse / specification-curve analysis (Steegen et al., 2016; Simonsohn et al
 
 - **H3 — Between- vs within-domain loading mass.** After fitting the chosen reducer on scaled edges, each component’s **mean |loading|** is compared **between-domain vs within-domain**. Across components, paired differences are tested with a **Wilcoxon signed-rank** on those differences (see `fbirn_experiment/multiverse.py`). A spec is **favourable** only if **Wilcoxon *p* < 0.05 and a strict majority of components have between-domain loading mass greater than within-domain loading mass**. Like H1, H3 requires a latent decomposition (**384** evaluable specs with `reduction ≠ none`).
 
-### Key takeaways from `results/multiverse_full`
+### Key takeaways from full multiverse analysis
 
 | Hypothesis | Supported in the multiverse sense? | Typical “winning” settings (from `mv_conditional_robustness.csv`) |
 |------------|-------------------------------------|-------------------------------------------------------------------|
@@ -22,7 +22,7 @@ Multiverse / specification-curve analysis (Steegen et al., 2016; Simonsohn et al
 
 ---
 
-## Full multiverse in this repo (`results/multiverse_full/`)
+## Full multiverse analysis
 
 A **full factorial** run is saved under `results/multiverse_full/`: **480** specifications in `multiverse_results.csv`, from the grid **4×3×5×4×2** (confound strategies **`none`**, **`ols`**, and **`combat`**).
 
@@ -71,21 +71,9 @@ Covariate / confound distributions (`figures/confound_distributions.png`) and gr
 
 ---
 
-## Figures (full)
+## Figures
 
-Specification curves and raincloud “forest” plots live in `results/multiverse_full/figures/`:
-
-![H1 spec curve](results/multiverse_full/figures/mv_spec_curve_h1.png)
-
-![H2 spec curve](results/multiverse_full/figures/mv_spec_curve_h2.png)
-
-![H3 spec curve](results/multiverse_full/figures/mv_spec_curve_h3.png)
-
-![H1 forest](results/multiverse_full/figures/mv_forest_h1.png)
-
-![H2 forest](results/multiverse_full/figures/mv_forest_h2.png)
-
-![H3 forest](results/multiverse_full/figures/mv_forest_h3.png)
+Specification curves and raincloud “forest” plots live in `results/multiverse_full/figures/`
 
 ---
 
